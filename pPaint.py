@@ -6,6 +6,10 @@ current_color = "#000000"
 current_tool = "brush"  # Default tool is brush
 brush_size = 3  # Default brush size
 
+# Lists to track actions for undo/redo
+actions_stack = []
+redo_stack = []
+
 # Function to change the color using the color picker
 def choose_color(event=None):
     global current_color
@@ -50,7 +54,9 @@ def paint(event):
     if current_tool == "brush":
         x1, y1 = (event.x - 1), (event.y - 1)
         x2, y2 = (event.x + 1), (event.y + 1)
-        canvas.create_line(x1, y1, x2, y2, fill=current_color, width=brush_size)
+        line = canvas.create_line(x1, y1, x2, y2, fill=current_color, width=brush_size)
+        actions_stack.append(line)
+        redo_stack.clear()  # Clear the redo stack on a new action
     elif current_tool == "rectangle":
         canvas.create_rectangle(start_x, start_y, event.x, event.y, outline=current_color, tags="preview", width=brush_size)
     elif current_tool == "circle":
@@ -61,11 +67,16 @@ def paint(event):
 # Function to finalize shape drawing (when mouse button is released)
 def finalize_shape(event):
     if current_tool == "rectangle":
-        canvas.create_rectangle(start_x, start_y, event.x, event.y, outline=current_color, fill="white", width=brush_size)
+        rect = canvas.create_rectangle(start_x, start_y, event.x, event.y, outline=current_color, fill="white", width=brush_size)
+        actions_stack.append(rect)
     elif current_tool == "circle":
-        canvas.create_oval(start_x, start_y, event.x, event.y, outline=current_color, fill="white", width=brush_size)
+        oval = canvas.create_oval(start_x, start_y, event.x, event.y, outline=current_color, fill="white", width=brush_size)
+        actions_stack.append(oval)
     elif current_tool == "line":
-        canvas.create_line(start_x, start_y, event.x, event.y, fill=current_color, width=brush_size)
+        line = canvas.create_line(start_x, start_y, event.x, event.y, fill=current_color, width=brush_size)
+        actions_stack.append(line)
+    
+    redo_stack.clear()  # Clear the redo stack on a new action
     canvas.delete("preview")  # Clear the preview shape tag to keep the final shape
 
 # Function to apply the fill tool on closed shapes or the canvas
@@ -83,10 +94,46 @@ def apply_fill(event):
                     item_type = canvas.type(item)
                     if item_type in ("rectangle", "oval"):  # Only fill supported for closed shapes
                         canvas.itemconfig(item, fill=current_color)  # Change its fill color to the current color
+                        actions_stack.append(('fill', item, current_color))  # Track the fill action
+                    redo_stack.clear()  # Clear the redo stack on a new action
                     return  # Stop after filling the first valid shape
         else:
             # No items found, fill the canvas background
             canvas.config(bg=current_color)
+            actions_stack.append(('canvas_fill', current_color))  # Track the fill action
+            redo_stack.clear()  # Clear the redo stack on a new action
+
+# Undo function
+def undo():
+    if actions_stack:
+        last_action = actions_stack.pop()
+        if isinstance(last_action, int):  # If it's a canvas item
+            canvas.itemconfig(last_action, state="hidden")
+            redo_stack.append(last_action)
+        elif isinstance(last_action, tuple):  # If it's a fill action
+            if last_action[0] == 'fill':
+                _, item, _ = last_action
+                canvas.itemconfig(item, fill="white")  # Set back to original fill color
+                redo_stack.append(last_action)
+            elif last_action[0] == 'canvas_fill':
+                canvas.config(bg="white")  # Reset canvas background
+                redo_stack.append(last_action)
+
+# Redo function
+def redo():
+    if redo_stack:
+        action = redo_stack.pop()
+        if isinstance(action, int):  # If it's a canvas item
+            canvas.itemconfig(action, state="normal")
+            actions_stack.append(action)
+        elif isinstance(action, tuple):  # If it's a fill action
+            if action[0] == 'fill':
+                _, item, color = action
+                canvas.itemconfig(item, fill=color)  # Redo the fill color
+                actions_stack.append(action)
+            elif action[0] == 'canvas_fill':
+                canvas.config(bg=action[2])  # Redo the canvas fill
+                actions_stack.append(action)
 
 # Create the main window
 root = tk.Tk()
@@ -125,6 +172,13 @@ line_button.pack(side=tk.LEFT)
 
 fill_button = tk.Button(tools_frame, text="Fill", command=lambda: select_tool("fill"))
 fill_button.pack(side=tk.LEFT)
+
+# Add undo and redo buttons
+undo_button = tk.Button(tools_frame, text="Undo", command=undo)
+undo_button.pack(side=tk.LEFT)
+
+redo_button = tk.Button(tools_frame, text="Redo", command=redo)
+redo_button.pack(side=tk.LEFT)
 
 # Add brush size slider
 brush_size_slider = tk.Scale(top_frame, from_=1, to=20, orient=tk.HORIZONTAL, label="Brush Size", command=update_brush_size)

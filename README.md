@@ -4,7 +4,7 @@ In addition to the basic drawing tools, students are encouraged to extend their 
 · Shape tools: Allow users to draw shapes such as rectangles, circles, and lines. - done
 · Fill tool: Add functionality to fill closed shapes with a selected color. - done
 · Customizable brush sizes: Give users the ability to change the size of their brush for more precise drawing. - done
-· Undo/Redo functionality: Implement a system to track user actions and allow them to revert or redo their changes.
+· Undo/Redo functionality: Implement a system to track user actions and allow them to revert or redo their changes. - done
 · Save and open files: Allow users to save their drawings as image files and open previously saved work.
 · Color picker: Provide an interactive color palette or picker for custom color selection.
 · Layer system: Introduce multiple layers for drawing, similar to advanced graphic design tools, where users can draw on different layers and manipulate them independently.
