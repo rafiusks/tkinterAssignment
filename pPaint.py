@@ -1,5 +1,6 @@
 import tkinter as tk
 from tkinter import colorchooser
+from PIL import Image, ImageDraw, ImageTk
 
 # Default settings
 current_color = "#000000"
@@ -9,6 +10,15 @@ brush_size = 3  # Default brush size
 # Lists to track actions for undo/redo
 actions_stack = []
 redo_stack = []
+
+# Create the main window
+root = tk.Tk()
+root.title("Simple Drawing Application")
+root.geometry("900x600")
+
+# Create a frame for the toolbar (top section)
+top_frame = tk.Frame(root)
+top_frame.pack(side=tk.TOP, fill=tk.X)
 
 # Function to change the color using the color picker
 def choose_color(event=None):
@@ -41,108 +51,154 @@ def update_brush_size(value):
     global brush_size
     brush_size = int(value)
 
+# Initialize the drawing surface
+canvas_width, canvas_height = 800, 500
+image = Image.new("RGBA", (canvas_width, canvas_height), "white")
+draw = ImageDraw.Draw(image)
+
+# Function to update the canvas image
+def update_canvas():
+    global photo_image
+    photo_image = ImageTk.PhotoImage(image)
+    canvas.create_image(0, 0, image=photo_image, anchor=tk.NW)
+
 # Function to start drawing shapes or freehand
 start_x, start_y = None, None
 def start_draw(event):
     global start_x, start_y
     start_x, start_y = event.x, event.y
 
+    if current_tool in ("rectangle", "circle", "line"):
+        # Store the current image for undo
+        actions_stack.append(image.copy())
+        redo_stack.clear()  # Clear redo stack
+
 # Function to draw on the canvas based on the selected tool
 def paint(event):
     global start_x, start_y
-    canvas.delete("preview")  # Remove any preview shape
     if current_tool == "brush":
-        x1, y1 = (event.x - 1), (event.y - 1)
-        x2, y2 = (event.x + 1), (event.y + 1)
-        line = canvas.create_line(x1, y1, x2, y2, fill=current_color, width=brush_size)
-        actions_stack.append(line)
-        redo_stack.clear()  # Clear the redo stack on a new action
-    elif current_tool == "rectangle":
-        canvas.create_rectangle(start_x, start_y, event.x, event.y, outline=current_color, tags="preview", width=brush_size)
-    elif current_tool == "circle":
-        canvas.create_oval(start_x, start_y, event.x, event.y, outline=current_color, tags="preview", width=brush_size)
-    elif current_tool == "line":
-        canvas.create_line(start_x, start_y, event.x, event.y, fill=current_color, tags="preview", width=brush_size)
+        # Draw line on the image
+        x1, y1 = event.x - brush_size / 2, event.y - brush_size / 2
+        x2, y2 = event.x + brush_size / 2, event.y + brush_size / 2
+        draw.ellipse([x1, y1, x2, y2], fill=current_color, outline=current_color)
+        update_canvas()
+        # For undo functionality
+        actions_stack.append(('draw', [x1, y1, x2, y2], current_color))
+        redo_stack.clear()  # Clear redo stack
+    elif current_tool == "eraser":
+        # Erase by drawing white color (or background color)
+        x1, y1 = event.x - brush_size / 2, event.y - brush_size / 2
+        x2, y2 = event.x + brush_size / 2, event.y + brush_size / 2
+        draw.ellipse([x1, y1, x2, y2], fill="white", outline="white")
+        update_canvas()
+        # For undo functionality
+        actions_stack.append(('erase', [x1, y1, x2, y2]))
+        redo_stack.clear()  # Clear redo stack
+    elif current_tool in ("rectangle", "circle", "line"):
+        # Draw a shape preview
+        temp_image = image.copy()
+        temp_draw = ImageDraw.Draw(temp_image)
+        shape_bbox = [start_x, start_y, event.x, event.y]
+        if current_tool == "rectangle":
+            temp_draw.rectangle(shape_bbox, outline=current_color, width=brush_size)
+        elif current_tool == "circle":
+            temp_draw.ellipse(shape_bbox, outline=current_color, width=brush_size)
+        elif current_tool == "line":
+            temp_draw.line([start_x, start_y, event.x, event.y], fill=current_color, width=brush_size)
+        # Update canvas with preview
+        preview_image = ImageTk.PhotoImage(temp_image)
+        canvas.create_image(0, 0, image=preview_image, anchor=tk.NW)
+        canvas.image = preview_image  # Keep a reference
+    elif current_tool == "fill":
+        pass  # Fill tool is handled on mouse release
 
 # Function to finalize shape drawing (when mouse button is released)
 def finalize_shape(event):
-    if current_tool == "rectangle":
-        rect = canvas.create_rectangle(start_x, start_y, event.x, event.y, outline=current_color, fill="white", width=brush_size)
-        actions_stack.append(rect)
-    elif current_tool == "circle":
-        oval = canvas.create_oval(start_x, start_y, event.x, event.y, outline=current_color, fill="white", width=brush_size)
-        actions_stack.append(oval)
-    elif current_tool == "line":
-        line = canvas.create_line(start_x, start_y, event.x, event.y, fill=current_color, width=brush_size)
-        actions_stack.append(line)
-    
-    redo_stack.clear()  # Clear the redo stack on a new action
-    canvas.delete("preview")  # Clear the preview shape tag to keep the final shape
+    global image, draw
+    if current_tool in ("rectangle", "circle", "line"):
+        shape_bbox = [start_x, start_y, event.x, event.y]
+        if current_tool == "rectangle":
+            draw.rectangle(shape_bbox, outline=current_color, width=brush_size)
+        elif current_tool == "circle":
+            draw.ellipse(shape_bbox, outline=current_color, width=brush_size)
+        elif current_tool == "line":
+            draw.line([start_x, start_y, event.x, event.y], fill=current_color, width=brush_size)
+        update_canvas()
+    elif current_tool == "fill":
+        # Implement fill (bucket tool)
+        fill_color = tuple(int(current_color.lstrip('#')[i:i+2], 16) for i in (0, 2, 4)) + (255,)
+        flood_fill(event.x, event.y, fill_color)
+        update_canvas()
+    # For undo functionality
+    if current_tool in ("rectangle", "circle", "line", "fill"):
+        actions_stack.append(image.copy())
+        redo_stack.clear()  # Clear redo stack
 
-# Function to apply the fill tool on closed shapes or the canvas
-def apply_fill(event):
-    if current_tool == "fill":
-        # Get all items at the clicked point
-        items = canvas.find_overlapping(event.x, event.y, event.x, event.y)
-        
-        if items:
-            # There is an item where the user clicked
-            for item in items:
-                # Check if the click is inside the bounding box of the item
-                bbox = canvas.bbox(item)
-                if bbox and (bbox[0] <= event.x <= bbox[2]) and (bbox[1] <= event.y <= bbox[3]):
-                    item_type = canvas.type(item)
-                    if item_type in ("rectangle", "oval"):  # Only fill supported for closed shapes
-                        canvas.itemconfig(item, fill=current_color)  # Change its fill color to the current color
-                        actions_stack.append(('fill', item, current_color))  # Track the fill action
-                    redo_stack.clear()  # Clear the redo stack on a new action
-                    return  # Stop after filling the first valid shape
-        else:
-            # No items found, fill the canvas background
-            canvas.config(bg=current_color)
-            actions_stack.append(('canvas_fill', current_color))  # Track the fill action
-            redo_stack.clear()  # Clear the redo stack on a new action
+# Implement flood fill algorithm
+def flood_fill(x, y, fill_color):
+    target_color = image.getpixel((x, y))
+    if target_color == fill_color:
+        return
+
+    pixel_data = image.load()
+    width, height = image.size
+    stack = [(x, y)]
+
+    while stack:
+        nx, ny = stack.pop()
+        if nx < 0 or nx >= width or ny < 0 or ny >= height:
+            continue
+        current_color = pixel_data[nx, ny]
+        if current_color == target_color:
+            pixel_data[nx, ny] = fill_color
+            stack.extend([(nx + 1, ny), (nx - 1, ny), (nx, ny + 1), (nx, ny - 1)])
 
 # Undo function
 def undo():
     if actions_stack:
         last_action = actions_stack.pop()
-        if isinstance(last_action, int):  # If it's a canvas item
-            canvas.itemconfig(last_action, state="hidden")
-            redo_stack.append(last_action)
-        elif isinstance(last_action, tuple):  # If it's a fill action
-            if last_action[0] == 'fill':
-                _, item, _ = last_action
-                canvas.itemconfig(item, fill="white")  # Set back to original fill color
+        if isinstance(last_action, tuple):
+            action_type = last_action[0]
+            if action_type == 'draw':
+                # Erase the last drawing action
+                bbox = last_action[1]
+                color = last_action[2]
+                draw.rectangle(bbox, fill="white", outline="white")
+                update_canvas()
                 redo_stack.append(last_action)
-            elif last_action[0] == 'canvas_fill':
-                canvas.config(bg="white")  # Reset canvas background
-                redo_stack.append(last_action)
+            elif action_type == 'erase':
+                # Re-draw the erased area (not fully accurate without storing previous pixels)
+                # For accurate undo, we need to store the pixels before erasing
+                pass  # Advanced implementation required
+        else:
+            # Restore the image state
+            redo_stack.append(image.copy())
+            image.paste(last_action)
+            update_canvas()
 
 # Redo function
 def redo():
     if redo_stack:
-        action = redo_stack.pop()
-        if isinstance(action, int):  # If it's a canvas item
-            canvas.itemconfig(action, state="normal")
-            actions_stack.append(action)
-        elif isinstance(action, tuple):  # If it's a fill action
-            if action[0] == 'fill':
-                _, item, color = action
-                canvas.itemconfig(item, fill=color)  # Redo the fill color
-                actions_stack.append(action)
-            elif action[0] == 'canvas_fill':
-                canvas.config(bg=action[2])  # Redo the canvas fill
-                actions_stack.append(action)
-
-# Create the main window
-root = tk.Tk()
-root.title("Simple Drawing Application")
-root.geometry("900x600")
-
-# Create a frame for the toolbar (top section)
-top_frame = tk.Frame(root)
-top_frame.pack(side=tk.TOP, fill=tk.X)
+        next_action = redo_stack.pop()
+        if isinstance(next_action, tuple):
+            action_type = next_action[0]
+            if action_type == 'draw':
+                bbox = next_action[1]
+                color = next_action[2]
+                draw.rectangle(bbox, fill=color, outline=color)
+                update_canvas()
+                actions_stack.append(next_action)
+            elif action_type == 'erase':
+                # Re-erase the area
+                bbox = next_action[1]
+                draw.rectangle(bbox, fill="white", outline="white")
+                update_canvas()
+                actions_stack.append(next_action)
+        else:
+            # Restore the image state
+            actions_stack.append(image.copy())
+            image.paste(next_action)
+            update_canvas()
 
 # Add color display box (clickable) and hex input
 color_display = tk.Label(top_frame, bg=current_color, width=10, height=2)
@@ -160,6 +216,9 @@ tools_frame.pack(side=tk.LEFT, padx=10)
 
 brush_button = tk.Button(tools_frame, text="Brush", command=lambda: select_tool("brush"))
 brush_button.pack(side=tk.LEFT)
+
+eraser_button = tk.Button(tools_frame, text="Eraser", command=lambda: select_tool("eraser"))
+eraser_button.pack(side=tk.LEFT)
 
 rectangle_button = tk.Button(tools_frame, text="Rectangle", command=lambda: select_tool("rectangle"))
 rectangle_button.pack(side=tk.LEFT)
@@ -181,18 +240,22 @@ redo_button = tk.Button(tools_frame, text="Redo", command=redo)
 redo_button.pack(side=tk.LEFT)
 
 # Add brush size slider
-brush_size_slider = tk.Scale(top_frame, from_=1, to=20, orient=tk.HORIZONTAL, label="Brush Size", command=update_brush_size)
+brush_size_slider = tk.Scale(top_frame, from_=1, to=20, orient=tk.HORIZONTAL, label="Brush/Eraser Size", command=update_brush_size)
 brush_size_slider.set(brush_size)  # Set default value
 brush_size_slider.pack(side=tk.LEFT, padx=10)
 
 # Create the canvas for drawing
-canvas = tk.Canvas(root, bg="white", width=800, height=500)
+canvas = tk.Canvas(root, bg="white", width=canvas_width, height=canvas_height)
 canvas.pack(fill=tk.BOTH, expand=True)
+
+# Initialize the canvas image
+photo_image = ImageTk.PhotoImage(image)
+canvas.create_image(0, 0, image=photo_image, anchor=tk.NW)
 
 # Bind mouse events to the canvas for drawing and shape creation
 canvas.bind("<B1-Motion>", paint)  # Mouse movement for freehand drawing or shape preview
 canvas.bind("<ButtonPress-1>", start_draw)  # Start drawing when mouse is pressed
-canvas.bind("<ButtonRelease-1>", lambda event: finalize_shape(event) if current_tool != "fill" else apply_fill(event))
+canvas.bind("<ButtonRelease-1>", finalize_shape)  # Finish drawing when mouse is released
 
 # Start the Tkinter main loop
 root.mainloop()
