@@ -4,6 +4,7 @@ from tkinter import colorchooser
 # Default settings
 current_color = "#000000"
 current_tool = "brush"  # Default tool is brush
+brush_size = 3  # Default brush size
 
 # Function to change the color using the color picker
 def choose_color(event=None):
@@ -31,6 +32,11 @@ def select_tool(tool):
     global current_tool
     current_tool = tool
 
+# Function to update brush size from slider
+def update_brush_size(value):
+    global brush_size
+    brush_size = int(value)
+
 # Function to start drawing shapes or freehand
 start_x, start_y = None, None
 def start_draw(event):
@@ -44,22 +50,22 @@ def paint(event):
     if current_tool == "brush":
         x1, y1 = (event.x - 1), (event.y - 1)
         x2, y2 = (event.x + 1), (event.y + 1)
-        canvas.create_line(x1, y1, x2, y2, fill=current_color, width=3)
+        canvas.create_line(x1, y1, x2, y2, fill=current_color, width=brush_size)
     elif current_tool == "rectangle":
-        canvas.create_rectangle(start_x, start_y, event.x, event.y, outline=current_color, tags="preview", width=2)
+        canvas.create_rectangle(start_x, start_y, event.x, event.y, outline=current_color, tags="preview", width=brush_size)
     elif current_tool == "circle":
-        canvas.create_oval(start_x, start_y, event.x, event.y, outline=current_color, tags="preview", width=2)
+        canvas.create_oval(start_x, start_y, event.x, event.y, outline=current_color, tags="preview", width=brush_size)
     elif current_tool == "line":
-        canvas.create_line(start_x, start_y, event.x, event.y, fill=current_color, tags="preview", width=2)
+        canvas.create_line(start_x, start_y, event.x, event.y, fill=current_color, tags="preview", width=brush_size)
 
 # Function to finalize shape drawing (when mouse button is released)
 def finalize_shape(event):
     if current_tool == "rectangle":
-        canvas.create_rectangle(start_x, start_y, event.x, event.y, outline=current_color, fill="white", width=2)
+        canvas.create_rectangle(start_x, start_y, event.x, event.y, outline=current_color, fill="white", width=brush_size)
     elif current_tool == "circle":
-        canvas.create_oval(start_x, start_y, event.x, event.y, outline=current_color, fill="white", width=2)
+        canvas.create_oval(start_x, start_y, event.x, event.y, outline=current_color, fill="white", width=brush_size)
     elif current_tool == "line":
-        canvas.create_line(start_x, start_y, event.x, event.y, fill=current_color, width=2)
+        canvas.create_line(start_x, start_y, event.x, event.y, fill=current_color, width=brush_size)
     canvas.delete("preview")  # Clear the preview shape tag to keep the final shape
 
 # Function to apply the fill tool on closed shapes or the canvas
@@ -119,6 +125,11 @@ line_button.pack(side=tk.LEFT)
 
 fill_button = tk.Button(tools_frame, text="Fill", command=lambda: select_tool("fill"))
 fill_button.pack(side=tk.LEFT)
+
+# Add brush size slider
+brush_size_slider = tk.Scale(top_frame, from_=1, to=20, orient=tk.HORIZONTAL, label="Brush Size", command=update_brush_size)
+brush_size_slider.set(brush_size)  # Set default value
+brush_size_slider.pack(side=tk.LEFT, padx=10)
 
 # Create the canvas for drawing
 canvas = tk.Canvas(root, bg="white", width=800, height=500)
