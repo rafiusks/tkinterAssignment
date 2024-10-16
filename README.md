@@ -1,8 +1,8 @@
 In this assignment, students will design and implement a simple graphical user interface (GUI) using Python and the Tkinter library. The goal is to create a basic drawing application similar to Microsoft Paint, where users can draw, erase, and interact with various drawing tools such as brushes and colors. Through this project, students will explore fundamental concepts in UI/UX design, event handling, and graphical programming while gaining hands-on experience with Tkinter, a powerful toolkit for building user interfaces in Python. This assignment will emphasize both functionality and the importance of user-friendly design principles.
 In addition to the basic drawing tools, students are encouraged to extend their programs by implementing optional features. These may include:
 
-· Shape tools: Allow users to draw shapes such as rectangles, circles, and lines.
-· Fill tool: Add functionality to fill closed shapes with a selected color.
+· Shape tools: Allow users to draw shapes such as rectangles, circles, and lines. - done
+· Fill tool: Add functionality to fill closed shapes with a selected color. - done
 · Customizable brush sizes: Give users the ability to change the size of their brush for more precise drawing.
 · Undo/Redo functionality: Implement a system to track user actions and allow them to revert or redo their changes.
 · Save and open files: Allow users to save their drawings as image files and open previously saved work.

@@ -40,29 +40,47 @@ def start_draw(event):
 # Function to draw on the canvas based on the selected tool
 def paint(event):
     global start_x, start_y
+    canvas.delete("preview")  # Remove any preview shape
     if current_tool == "brush":
         x1, y1 = (event.x - 1), (event.y - 1)
         x2, y2 = (event.x + 1), (event.y + 1)
         canvas.create_line(x1, y1, x2, y2, fill=current_color, width=3)
     elif current_tool == "rectangle":
-        canvas.delete("preview")
-        canvas.create_rectangle(start_x, start_y, event.x, event.y, outline=current_color, tags="preview")
+        canvas.create_rectangle(start_x, start_y, event.x, event.y, outline=current_color, tags="preview", width=2)
     elif current_tool == "circle":
-        canvas.delete("preview")
-        canvas.create_oval(start_x, start_y, event.x, event.y, outline=current_color, tags="preview")
+        canvas.create_oval(start_x, start_y, event.x, event.y, outline=current_color, tags="preview", width=2)
     elif current_tool == "line":
-        canvas.delete("preview")
-        canvas.create_line(start_x, start_y, event.x, event.y, fill=current_color, tags="preview")
+        canvas.create_line(start_x, start_y, event.x, event.y, fill=current_color, tags="preview", width=2)
 
 # Function to finalize shape drawing (when mouse button is released)
 def finalize_shape(event):
     if current_tool == "rectangle":
-        canvas.create_rectangle(start_x, start_y, event.x, event.y, outline=current_color)
+        canvas.create_rectangle(start_x, start_y, event.x, event.y, outline=current_color, fill="white", width=2)
     elif current_tool == "circle":
-        canvas.create_oval(start_x, start_y, event.x, event.y, outline=current_color)
+        canvas.create_oval(start_x, start_y, event.x, event.y, outline=current_color, fill="white", width=2)
     elif current_tool == "line":
-        canvas.create_line(start_x, start_y, event.x, event.y, fill=current_color)
-    canvas.delete("preview")  # Clear the preview shape
+        canvas.create_line(start_x, start_y, event.x, event.y, fill=current_color, width=2)
+    canvas.delete("preview")  # Clear the preview shape tag to keep the final shape
+
+# Function to apply the fill tool on closed shapes or the canvas
+def apply_fill(event):
+    if current_tool == "fill":
+        # Get all items at the clicked point
+        items = canvas.find_overlapping(event.x, event.y, event.x, event.y)
+        
+        if items:
+            # There is an item where the user clicked
+            for item in items:
+                # Check if the click is inside the bounding box of the item
+                bbox = canvas.bbox(item)
+                if bbox and (bbox[0] <= event.x <= bbox[2]) and (bbox[1] <= event.y <= bbox[3]):
+                    item_type = canvas.type(item)
+                    if item_type in ("rectangle", "oval"):  # Only fill supported for closed shapes
+                        canvas.itemconfig(item, fill=current_color)  # Change its fill color to the current color
+                    return  # Stop after filling the first valid shape
+        else:
+            # No items found, fill the canvas background
+            canvas.config(bg=current_color)
 
 # Create the main window
 root = tk.Tk()
@@ -99,6 +117,9 @@ circle_button.pack(side=tk.LEFT)
 line_button = tk.Button(tools_frame, text="Line", command=lambda: select_tool("line"))
 line_button.pack(side=tk.LEFT)
 
+fill_button = tk.Button(tools_frame, text="Fill", command=lambda: select_tool("fill"))
+fill_button.pack(side=tk.LEFT)
+
 # Create the canvas for drawing
 canvas = tk.Canvas(root, bg="white", width=800, height=500)
 canvas.pack(fill=tk.BOTH, expand=True)
@@ -106,7 +127,7 @@ canvas.pack(fill=tk.BOTH, expand=True)
 # Bind mouse events to the canvas for drawing and shape creation
 canvas.bind("<B1-Motion>", paint)  # Mouse movement for freehand drawing or shape preview
 canvas.bind("<ButtonPress-1>", start_draw)  # Start drawing when mouse is pressed
-canvas.bind("<ButtonRelease-1>", finalize_shape)  # Finalize shape when mouse is released
+canvas.bind("<ButtonRelease-1>", lambda event: finalize_shape(event) if current_tool != "fill" else apply_fill(event))
 
 # Start the Tkinter main loop
 root.mainloop()
