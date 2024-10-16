@@ -51,16 +51,42 @@ def update_brush_size(value):
     global brush_size
     brush_size = int(value)
 
-# Initialize the drawing surface
-canvas_width, canvas_height = 800, 500
-image = Image.new("RGBA", (canvas_width, canvas_height), "white")
-draw = ImageDraw.Draw(image)
+# Initialize the drawing surface (will be updated later)
+image = None
+draw = None
 
 # Function to update the canvas image
 def update_canvas():
     global photo_image
     photo_image = ImageTk.PhotoImage(image)
     canvas.create_image(0, 0, image=photo_image, anchor=tk.NW)
+
+# Function to handle canvas resizing
+def resize_canvas(event):
+    global image, draw
+    # Get the new canvas size
+    canvas_width = event.width
+    canvas_height = event.height
+
+    if image is not None:
+        # Resize the image
+        old_image = image
+        image = Image.new("RGBA", (canvas_width, canvas_height), "white")
+        old_width, old_height = old_image.size
+
+        # Calculate the overlapping region
+        paste_width = min(canvas_width, old_width)
+        paste_height = min(canvas_height, old_height)
+        box = (0, 0, paste_width, paste_height)
+
+        # Crop the old image to the overlapping region
+        region = old_image.crop(box)
+
+        # Paste the cropped region into the new image
+        image.paste(region, (0, 0))
+
+        draw = ImageDraw.Draw(image)
+        update_canvas()
 
 # Function to start drawing shapes or freehand
 start_x, start_y = None, None
@@ -89,7 +115,7 @@ def paint(event):
         # Erase by drawing white color (or background color)
         x1, y1 = event.x - brush_size / 2, event.y - brush_size / 2
         x2, y2 = event.x + brush_size / 2, event.y + brush_size / 2
-        draw.ellipse([x1, y1, x2, y2], fill="white", outline="white")
+        draw.rectangle([x1, y1, x2, y2], fill="white", outline="white")
         update_canvas()
         # For undo functionality
         actions_stack.append(('erase', [x1, y1, x2, y2]))
@@ -136,7 +162,10 @@ def finalize_shape(event):
 
 # Implement flood fill algorithm
 def flood_fill(x, y, fill_color):
-    target_color = image.getpixel((x, y))
+    try:
+        target_color = image.getpixel((x, y))
+    except IndexError:
+        return
     if target_color == fill_color:
         return
 
@@ -155,6 +184,7 @@ def flood_fill(x, y, fill_color):
 
 # Undo function
 def undo():
+    global image, draw
     if actions_stack:
         last_action = actions_stack.pop()
         if isinstance(last_action, tuple):
@@ -167,17 +197,18 @@ def undo():
                 update_canvas()
                 redo_stack.append(last_action)
             elif action_type == 'erase':
-                # Re-draw the erased area (not fully accurate without storing previous pixels)
-                # For accurate undo, we need to store the pixels before erasing
-                pass  # Advanced implementation required
+                # Cannot accurately undo erase without storing previous pixels
+                pass
         else:
             # Restore the image state
             redo_stack.append(image.copy())
             image.paste(last_action)
+            draw = ImageDraw.Draw(image)
             update_canvas()
 
 # Redo function
 def redo():
+    global image, draw
     if redo_stack:
         next_action = redo_stack.pop()
         if isinstance(next_action, tuple):
@@ -198,6 +229,7 @@ def redo():
             # Restore the image state
             actions_stack.append(image.copy())
             image.paste(next_action)
+            draw = ImageDraw.Draw(image)
             update_canvas()
 
 # Add color display box (clickable) and hex input
@@ -245,17 +277,27 @@ brush_size_slider.set(brush_size)  # Set default value
 brush_size_slider.pack(side=tk.LEFT, padx=10)
 
 # Create the canvas for drawing
-canvas = tk.Canvas(root, bg="white", width=canvas_width, height=canvas_height)
+canvas = tk.Canvas(root, bg="white")
 canvas.pack(fill=tk.BOTH, expand=True)
 
-# Initialize the canvas image
-photo_image = ImageTk.PhotoImage(image)
-canvas.create_image(0, 0, image=photo_image, anchor=tk.NW)
+# Initialize the canvas image after the canvas is created and packed
+def initialize_canvas_image(event=None):
+    global image, draw
+    if image is None:
+        canvas_width = canvas.winfo_width()
+        canvas_height = canvas.winfo_height()
+        image = Image.new("RGBA", (canvas_width, canvas_height), "white")
+        draw = ImageDraw.Draw(image)
+        update_canvas()
+
+# Bind the initialization to the canvas size change
+canvas.bind("<Configure>", initialize_canvas_image, add="+")
+canvas.bind("<Configure>", resize_canvas, add="+")
 
 # Bind mouse events to the canvas for drawing and shape creation
 canvas.bind("<B1-Motion>", paint)  # Mouse movement for freehand drawing or shape preview
 canvas.bind("<ButtonPress-1>", start_draw)  # Start drawing when mouse is pressed
-canvas.bind("<ButtonRelease-1>", finalize_shape)  # Finish drawing when mouse is released
+canvas.bind("<ButtonRelease-1>", finalize_shape)
 
 # Start the Tkinter main loop
 root.mainloop()
