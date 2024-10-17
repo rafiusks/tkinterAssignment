@@ -2,21 +2,23 @@ import tkinter as tk
 from tkinter import colorchooser
 from tkinter import ttk, filedialog, messagebox
 from PIL import Image, ImageDraw, ImageTk
-import sys
 
 # Default settings
 current_color = "#000000"
 current_tool = "brush"  # Default tool is brush
-brush_size = 3  # Default brush size
+brush_size = 10  # Default brush size set to 10
 
 # Lists to track actions for undo/redo
 actions_stack = []
 redo_stack = []
 
+# Dictionary to hold references to tool buttons
+tool_buttons = {}
+
 # Create the main window
 root = tk.Tk()
 root.title("Simple Drawing Application")
-root.geometry("1400x1000")
+root.geometry("1200x600")
 
 # Set default font
 default_font = ("San Francisco", 12)
@@ -81,11 +83,19 @@ def select_tool(tool):
     global current_tool
     current_tool = tool
     update_tool_status()
+    update_button_states()
 
-# Function to update brush size from slider
-def update_brush_size(value):
-    global brush_size
-    brush_size = int(float(value))
+# Function to update the appearance of tool buttons based on the active tool
+def update_button_states():
+    for tool_name, button_info in tool_buttons.items():
+        canvas_btn = button_info['canvas']
+        circle = button_info['circle']
+        if tool_name == current_tool:
+            # Active button
+            canvas_btn.itemconfig(circle, fill=active_color)
+        else:
+            # Inactive button
+            canvas_btn.itemconfig(circle, fill=circle_color)
 
 # Initialize the drawing surface (will be updated later)
 image = None
@@ -248,47 +258,61 @@ def redo(event=None):
         update_canvas()
 
 # Define the font for emojis
-emoji_font = ("Apple Color Emoji", 36)  # Increased size further from 28 to 36
+emoji_font = ("Apple Color Emoji", 36)
 
 # Create the toolbar
 toolbar = ttk.Frame(root, padding="5 5")
 toolbar.pack(side=tk.TOP, fill=tk.X)
 
 # Common button settings
-button_size = 60  # Increased size to accommodate larger emojis
-circle_radius = 28  # Increased radius
-circle_color = "#555555"  # Darker background color
-hover_color = "#777777"  # Adjusted hover color
-active_color = "#999999"  # Adjusted active color
+button_size = 60
+circle_radius = 28
+circle_color = "#555555"
+hover_color = "#777777"
+active_color = "#999999"
 
-def create_round_button(parent, emoji, command, tooltip_text):
-    canvas = tk.Canvas(parent, width=button_size, height=button_size, highlightthickness=0)
+def create_round_button(parent, emoji, command, tooltip_text, tool_name=None):
+    canvas_btn = tk.Canvas(parent, width=button_size, height=button_size, highlightthickness=0)
     # Draw circle
-    circle = canvas.create_oval(
+    circle = canvas_btn.create_oval(
         (button_size - 2 * circle_radius) // 2,
         (button_size - 2 * circle_radius) // 2,
         (button_size + 2 * circle_radius) // 2,
         (button_size + 2 * circle_radius) // 2,
-        fill=circle_color,
+        fill=active_color if tool_name == current_tool else circle_color,
         outline=""
     )
     # Add emoji text
-    text = canvas.create_text(button_size // 2, button_size // 2, text=emoji, font=emoji_font)
-    canvas.pack(side=tk.LEFT, padx=5)
+    text = canvas_btn.create_text(button_size // 2, button_size // 2, text=emoji, font=emoji_font)
+    canvas_btn.pack(side=tk.LEFT, padx=5)
+
+    # Store the canvas and circle in tool_buttons if tool_name is provided
+    if tool_name:
+        tool_buttons[tool_name] = {'canvas': canvas_btn, 'circle': circle}
 
     # Bind events
     def on_click(event):
         command()
-    def on_enter(event):
-        canvas.itemconfig(circle, fill=hover_color)
-    def on_leave(event):
-        canvas.itemconfig(circle, fill=circle_color)
 
-    canvas.bind("<Button-1>", on_click)
-    canvas.bind("<Enter>", on_enter)
-    canvas.bind("<Leave>", on_leave)
-    CreateToolTip(canvas, tooltip_text)
-    return canvas
+    def on_enter(event):
+        if tool_name and tool_name == current_tool:
+            # Active tool, keep active color
+            canvas_btn.itemconfig(circle, fill=active_color)
+        else:
+            canvas_btn.itemconfig(circle, fill=hover_color)
+
+    def on_leave(event):
+        if tool_name and tool_name == current_tool:
+            # Active tool, keep active color
+            canvas_btn.itemconfig(circle, fill=active_color)
+        else:
+            canvas_btn.itemconfig(circle, fill=circle_color)
+
+    canvas_btn.bind("<Button-1>", on_click)
+    canvas_btn.bind("<Enter>", on_enter)
+    canvas_btn.bind("<Leave>", on_leave)
+    CreateToolTip(canvas_btn, tooltip_text)
+    return canvas_btn
 
 # Group 1: Drawing Tools (Brush and Eraser)
 drawing_tools_frame = ttk.Frame(toolbar)
@@ -298,14 +322,16 @@ brush_button = create_round_button(
     drawing_tools_frame,
     '🖌️',
     lambda: select_tool("brush"),
-    "Brush Tool (B)"
+    "Brush Tool (B)",
+    tool_name="brush"
 )
 
 eraser_button = create_round_button(
     drawing_tools_frame,
     '🩹',
     lambda: select_tool("eraser"),
-    "Eraser Tool (E)"
+    "Eraser Tool (E)",
+    tool_name="eraser"
 )
 
 # Separator between groups
@@ -319,21 +345,24 @@ rectangle_button = create_round_button(
     shape_tools_frame,
     '▭',
     lambda: select_tool("rectangle"),
-    "Rectangle Tool (R)"
+    "Rectangle Tool (R)",
+    tool_name="rectangle"
 )
 
 circle_button = create_round_button(
     shape_tools_frame,
     '⚪',
     lambda: select_tool("circle"),
-    "Circle Tool (C)"
+    "Circle Tool (C)",
+    tool_name="circle"
 )
 
 line_button = create_round_button(
     shape_tools_frame,
     '➖',
     lambda: select_tool("line"),
-    "Line Tool (L)"
+    "Line Tool (L)",
+    tool_name="line"
 )
 
 # Separator between groups
@@ -347,7 +376,8 @@ fill_button = create_round_button(
     fill_tools_frame,
     '🪣',
     lambda: select_tool("fill"),
-    "Fill Tool (F)"
+    "Fill Tool (F)",
+    tool_name="fill"
 )
 
 # Separator between groups
@@ -379,7 +409,7 @@ other_tools_frame = ttk.Frame(toolbar)
 other_tools_frame.pack(side=tk.LEFT, padx=5)
 
 # Adjust color button size
-color_button_size = 50  # Increased size to match the new button size
+color_button_size = 50
 
 # Add color button
 color_button = tk.Canvas(other_tools_frame, width=color_button_size, height=color_button_size, bd=1, relief='ridge')
@@ -388,11 +418,36 @@ color_button.bind("<Button-1>", choose_color)
 color_button.pack(side=tk.LEFT, padx=5)
 CreateToolTip(color_button, "Choose Color")
 
-# Add brush size label and slider
-brush_size_label = ttk.Label(other_tools_frame, text="Brush Size:")
-brush_size_label.pack(side=tk.LEFT, padx=2)
+# Add brush size label and slider frame
+brush_size_frame = ttk.Frame(other_tools_frame)
+brush_size_frame.pack(side=tk.LEFT, padx=5)
 
-brush_size_slider = ttk.Scale(other_tools_frame, from_=1, to=20, orient=tk.HORIZONTAL, command=update_brush_size, length=100)
+# Add min and max labels for the slider
+min_label = ttk.Label(brush_size_frame, text="1")
+min_label.pack(side=tk.LEFT)
+
+# Add max label
+max_label = ttk.Label(brush_size_frame, text="100")
+max_label.pack(side=tk.RIGHT)
+
+# Add current brush size label
+brush_size_value_label = ttk.Label(brush_size_frame, text=f"{brush_size}")
+brush_size_value_label.pack(side=tk.RIGHT, padx=5)
+
+# Add brush size slider
+def update_brush_size(value):
+    global brush_size
+    brush_size = max(1, int(float(value)))
+    brush_size_value_label.config(text=f"{brush_size}")
+
+brush_size_slider = ttk.Scale(
+    brush_size_frame,
+    from_=1,
+    to=100,
+    orient=tk.HORIZONTAL,
+    command=update_brush_size,
+    length=150
+)
 brush_size_slider.set(brush_size)
 brush_size_slider.pack(side=tk.LEFT, padx=2)
 CreateToolTip(brush_size_slider, "Adjust Brush Size")
@@ -424,6 +479,9 @@ def update_color_status():
 # Call update functions to initialize status bar
 update_tool_status()
 update_color_status()
+
+# Update button states to reflect the initial tool
+update_button_states()
 
 # Create the canvas for drawing
 canvas = tk.Canvas(root, bg="white")
