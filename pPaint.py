@@ -16,11 +16,54 @@ redo_stack = []
 # Create the main window
 root = tk.Tk()
 root.title("Simple Drawing Application")
-root.geometry("1200x600")
+root.geometry("1400x1000")
 
 # Set default font
 default_font = ("San Francisco", 12)
 root.option_add("*Font", default_font)
+
+# Tooltip class with delay and visible text
+class CreateToolTip(object):
+    def __init__(self, widget, text='', delay=500):
+        self.widget = widget
+        self.text = text
+        self.delay = delay  # Delay in milliseconds before showing the tooltip
+        self.tip_window = None
+        self.id = None
+        self.widget.bind("<Enter>", self.schedule_tooltip)
+        self.widget.bind("<Leave>", self.hide_tooltip)
+        self.widget.bind("<ButtonPress>", self.hide_tooltip)
+
+    def schedule_tooltip(self, event=None):
+        self.unschedule_tooltip()
+        self.id = self.widget.after(self.delay, self.show_tooltip)
+
+    def unschedule_tooltip(self):
+        if self.id:
+            self.widget.after_cancel(self.id)
+            self.id = None
+
+    def show_tooltip(self, event=None):
+        if self.tip_window or not self.text:
+            return
+        x = self.widget.winfo_rootx() + 20
+        y = self.widget.winfo_rooty() + 20
+        self.tip_window = tw = tk.Toplevel(self.widget)
+        tw.wm_overrideredirect(True)  # Remove window decorations
+        tw.wm_geometry(f"+{x}+{y}")
+        label = tk.Label(
+            tw, text=self.text, justify=tk.LEFT,
+            background="#ffffe0", relief='solid', borderwidth=1,
+            foreground="black", font=("San Francisco", 10)
+        )
+        label.pack(ipadx=1)
+        self.id = None  # Reset the schedule ID
+
+    def hide_tooltip(self, event=None):
+        self.unschedule_tooltip()
+        if self.tip_window:
+            self.tip_window.destroy()
+            self.tip_window = None
 
 # Function to change the color using the color picker
 def choose_color(event=None):
@@ -30,7 +73,7 @@ def choose_color(event=None):
         current_color = color[1]
         # Update the color display
         color_button.delete("all")
-        color_button.create_rectangle(0, 0, 24, 24, fill=current_color, outline='')
+        color_button.create_rectangle(0, 0, color_button_size, color_button_size, fill=current_color, outline='')
         update_color_status()
 
 # Function to select the drawing tool
@@ -204,21 +247,66 @@ def redo(event=None):
         draw = ImageDraw.Draw(image)
         update_canvas()
 
+# Define the font for emojis
+emoji_font = ("Apple Color Emoji", 36)  # Increased size further from 28 to 36
+
 # Create the toolbar
 toolbar = ttk.Frame(root, padding="5 5")
 toolbar.pack(side=tk.TOP, fill=tk.X)
 
-# Create tool groups
+# Common button settings
+button_size = 60  # Increased size to accommodate larger emojis
+circle_radius = 28  # Increased radius
+circle_color = "#555555"  # Darker background color
+hover_color = "#777777"  # Adjusted hover color
+active_color = "#999999"  # Adjusted active color
+
+def create_round_button(parent, emoji, command, tooltip_text):
+    canvas = tk.Canvas(parent, width=button_size, height=button_size, highlightthickness=0)
+    # Draw circle
+    circle = canvas.create_oval(
+        (button_size - 2 * circle_radius) // 2,
+        (button_size - 2 * circle_radius) // 2,
+        (button_size + 2 * circle_radius) // 2,
+        (button_size + 2 * circle_radius) // 2,
+        fill=circle_color,
+        outline=""
+    )
+    # Add emoji text
+    text = canvas.create_text(button_size // 2, button_size // 2, text=emoji, font=emoji_font)
+    canvas.pack(side=tk.LEFT, padx=5)
+
+    # Bind events
+    def on_click(event):
+        command()
+    def on_enter(event):
+        canvas.itemconfig(circle, fill=hover_color)
+    def on_leave(event):
+        canvas.itemconfig(circle, fill=circle_color)
+
+    canvas.bind("<Button-1>", on_click)
+    canvas.bind("<Enter>", on_enter)
+    canvas.bind("<Leave>", on_leave)
+    CreateToolTip(canvas, tooltip_text)
+    return canvas
 
 # Group 1: Drawing Tools (Brush and Eraser)
 drawing_tools_frame = ttk.Frame(toolbar)
 drawing_tools_frame.pack(side=tk.LEFT, padx=5)
 
-brush_button = ttk.Button(drawing_tools_frame, text="Brush", command=lambda: select_tool("brush"))
-brush_button.pack(side=tk.LEFT, padx=2)
+brush_button = create_round_button(
+    drawing_tools_frame,
+    '🖌️',
+    lambda: select_tool("brush"),
+    "Brush Tool (B)"
+)
 
-eraser_button = ttk.Button(drawing_tools_frame, text="Eraser", command=lambda: select_tool("eraser"))
-eraser_button.pack(side=tk.LEFT, padx=2)
+eraser_button = create_round_button(
+    drawing_tools_frame,
+    '🩹',
+    lambda: select_tool("eraser"),
+    "Eraser Tool (E)"
+)
 
 # Separator between groups
 ttk.Separator(toolbar, orient=tk.VERTICAL).pack(side=tk.LEFT, fill=tk.Y, padx=5)
@@ -227,14 +315,26 @@ ttk.Separator(toolbar, orient=tk.VERTICAL).pack(side=tk.LEFT, fill=tk.Y, padx=5)
 shape_tools_frame = ttk.Frame(toolbar)
 shape_tools_frame.pack(side=tk.LEFT, padx=5)
 
-rectangle_button = ttk.Button(shape_tools_frame, text="Rectangle", command=lambda: select_tool("rectangle"))
-rectangle_button.pack(side=tk.LEFT, padx=2)
+rectangle_button = create_round_button(
+    shape_tools_frame,
+    '▭',
+    lambda: select_tool("rectangle"),
+    "Rectangle Tool (R)"
+)
 
-circle_button = ttk.Button(shape_tools_frame, text="Circle", command=lambda: select_tool("circle"))
-circle_button.pack(side=tk.LEFT, padx=2)
+circle_button = create_round_button(
+    shape_tools_frame,
+    '⚪',
+    lambda: select_tool("circle"),
+    "Circle Tool (C)"
+)
 
-line_button = ttk.Button(shape_tools_frame, text="Line", command=lambda: select_tool("line"))
-line_button.pack(side=tk.LEFT, padx=2)
+line_button = create_round_button(
+    shape_tools_frame,
+    '➖',
+    lambda: select_tool("line"),
+    "Line Tool (L)"
+)
 
 # Separator between groups
 ttk.Separator(toolbar, orient=tk.VERTICAL).pack(side=tk.LEFT, fill=tk.Y, padx=5)
@@ -243,8 +343,12 @@ ttk.Separator(toolbar, orient=tk.VERTICAL).pack(side=tk.LEFT, fill=tk.Y, padx=5)
 fill_tools_frame = ttk.Frame(toolbar)
 fill_tools_frame.pack(side=tk.LEFT, padx=5)
 
-fill_button = ttk.Button(fill_tools_frame, text="Fill", command=lambda: select_tool("fill"))
-fill_button.pack(side=tk.LEFT, padx=2)
+fill_button = create_round_button(
+    fill_tools_frame,
+    '🪣',
+    lambda: select_tool("fill"),
+    "Fill Tool (F)"
+)
 
 # Separator between groups
 ttk.Separator(toolbar, orient=tk.VERTICAL).pack(side=tk.LEFT, fill=tk.Y, padx=5)
@@ -253,11 +357,19 @@ ttk.Separator(toolbar, orient=tk.VERTICAL).pack(side=tk.LEFT, fill=tk.Y, padx=5)
 action_tools_frame = ttk.Frame(toolbar)
 action_tools_frame.pack(side=tk.LEFT, padx=5)
 
-undo_button = ttk.Button(action_tools_frame, text="Undo", command=undo)
-undo_button.pack(side=tk.LEFT, padx=2)
+undo_button = create_round_button(
+    action_tools_frame,
+    '↩️',
+    undo,
+    "Undo (Cmd+Z)"
+)
 
-redo_button = ttk.Button(action_tools_frame, text="Redo", command=redo)
-redo_button.pack(side=tk.LEFT, padx=2)
+redo_button = create_round_button(
+    action_tools_frame,
+    '↪️',
+    redo,
+    "Redo (Shift+Cmd+Z)"
+)
 
 # Separator between groups
 ttk.Separator(toolbar, orient=tk.VERTICAL).pack(side=tk.LEFT, fill=tk.Y, padx=5)
@@ -266,15 +378,15 @@ ttk.Separator(toolbar, orient=tk.VERTICAL).pack(side=tk.LEFT, fill=tk.Y, padx=5)
 other_tools_frame = ttk.Frame(toolbar)
 other_tools_frame.pack(side=tk.LEFT, padx=5)
 
-# Add color button
-def create_color_button(parent):
-    color_canvas = tk.Canvas(parent, width=24, height=24, bd=1, relief='ridge')
-    color_canvas.create_rectangle(0, 0, 24, 24, fill=current_color, outline='')
-    color_canvas.bind("<Button-1>", choose_color)
-    return color_canvas
+# Adjust color button size
+color_button_size = 50  # Increased size to match the new button size
 
-color_button = create_color_button(other_tools_frame)
-color_button.pack(side=tk.LEFT, padx=2)
+# Add color button
+color_button = tk.Canvas(other_tools_frame, width=color_button_size, height=color_button_size, bd=1, relief='ridge')
+color_button.create_rectangle(0, 0, color_button_size, color_button_size, fill=current_color, outline='')
+color_button.bind("<Button-1>", choose_color)
+color_button.pack(side=tk.LEFT, padx=5)
+CreateToolTip(color_button, "Choose Color")
 
 # Add brush size label and slider
 brush_size_label = ttk.Label(other_tools_frame, text="Brush Size:")
@@ -283,6 +395,7 @@ brush_size_label.pack(side=tk.LEFT, padx=2)
 brush_size_slider = ttk.Scale(other_tools_frame, from_=1, to=20, orient=tk.HORIZONTAL, command=update_brush_size, length=100)
 brush_size_slider.set(brush_size)
 brush_size_slider.pack(side=tk.LEFT, padx=2)
+CreateToolTip(brush_size_slider, "Adjust Brush Size")
 
 # Add status bar
 status_bar = ttk.Frame(root, relief=tk.SUNKEN, padding="5 2")
@@ -329,16 +442,14 @@ def initialize_canvas_image(event=None):
 # Bind the initialization to the canvas size change
 canvas.bind("<Configure>", initialize_canvas_image, add="+")
 canvas.bind("<Configure>", resize_canvas, add="+")
+canvas.bind("<Motion>", update_position_status)
 
 # Bind mouse events to the canvas for drawing and shape creation
 canvas.bind("<B1-Motion>", paint)
 canvas.bind("<ButtonPress-1>", start_draw)
 canvas.bind("<ButtonRelease-1>", finalize_shape)
 
-# Update statuses on events
-canvas.bind("<Motion>", update_position_status)
-
-# Create macOS-style menus
+# Create macOS-style menus (optional; you can adjust this section as needed)
 def create_macos_menus(root):
     # Remove the default Tk menu bar
     root.option_add('*tearOff', False)
@@ -433,61 +544,6 @@ def bind_tool_shortcuts():
     root.bind('f', lambda event: select_tool('fill'))
 
 bind_tool_shortcuts()
-
-# Tooltip class with delay and visible text
-class CreateToolTip(object):
-    def __init__(self, widget, text='', delay=500):
-        self.widget = widget
-        self.text = text
-        self.delay = delay  # Delay in milliseconds before showing the tooltip
-        self.tip_window = None
-        self.id = None
-        self.widget.bind("<Enter>", self.schedule_tooltip)
-        self.widget.bind("<Leave>", self.hide_tooltip)
-        self.widget.bind("<ButtonPress>", self.hide_tooltip)
-
-    def schedule_tooltip(self, event=None):
-        self.unschedule_tooltip()
-        self.id = self.widget.after(self.delay, self.show_tooltip)
-
-    def unschedule_tooltip(self):
-        if self.id:
-            self.widget.after_cancel(self.id)
-            self.id = None
-
-    def show_tooltip(self, event=None):
-        if self.tip_window or not self.text:
-            return
-        x = self.widget.winfo_rootx() + 20
-        y = self.widget.winfo_rooty() + 20
-        self.tip_window = tw = tk.Toplevel(self.widget)
-        tw.wm_overrideredirect(True)  # Remove window decorations
-        tw.wm_geometry(f"+{x}+{y}")
-        label = tk.Label(
-            tw, text=self.text, justify=tk.LEFT,
-            background="#ffffe0", relief='solid', borderwidth=1,
-            foreground="black", font=("San Francisco", 10)
-        )
-        label.pack(ipadx=1)
-        self.id = None  # Reset the schedule ID
-
-    def hide_tooltip(self, event=None):
-        self.unschedule_tooltip()
-        if self.tip_window:
-            self.tip_window.destroy()
-            self.tip_window = None
-
-# Attach tooltips to buttons
-CreateToolTip(brush_button, "Brush Tool (B)")
-CreateToolTip(eraser_button, "Eraser Tool (E)")
-CreateToolTip(rectangle_button, "Rectangle Tool (R)")
-CreateToolTip(circle_button, "Circle Tool (C)")
-CreateToolTip(line_button, "Line Tool (L)")
-CreateToolTip(fill_button, "Fill Tool (F)")
-CreateToolTip(undo_button, "Undo (Cmd+Z)")
-CreateToolTip(redo_button, "Redo (Shift+Cmd+Z)")
-CreateToolTip(color_button, "Choose Color")
-CreateToolTip(brush_size_slider, "Adjust Brush Size")
 
 # Start the Tkinter main loop
 root.mainloop()
