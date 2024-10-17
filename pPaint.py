@@ -15,6 +15,10 @@ redo_stack = []
 # Dictionary to hold references to tool buttons
 tool_buttons = {}
 
+# Add variables to track drawing positions
+start_x, start_y = None, None
+prev_x, prev_y = None, None
+
 # Create the main window
 root = tk.Tk()
 root.title("Simple Drawing Application")
@@ -181,62 +185,58 @@ def update_button_states():
             canvas_btn.itemconfig(circle, fill=circle_color)
 
 # Function to start drawing shapes or freehand
-start_x, start_y = None, None
 def start_draw(event):
-    global start_x, start_y
+    global start_x, start_y, prev_x, prev_y
     start_x, start_y = event.x, event.y
+    prev_x, prev_y = event.x, event.y
 
-    if current_tool in ("rectangle", "circle", "line"):
-        # Store the current image for undo
-        actions_stack.append(image.copy())
-        redo_stack.clear()  # Clear redo stack
+    # For undo functionality, store the image before drawing starts
+    actions_stack.append(image.copy())
+    redo_stack.clear()  # Clear redo stack
 
 # Function to draw on the canvas based on the selected tool
 def paint(event):
-    global start_x, start_y
+    global prev_x, prev_y
     if current_tool == "brush":
-        x1 = event.x - brush_size / 2
-        y1 = event.y - brush_size / 2
-        x2 = event.x + brush_size / 2
-        y2 = event.y + brush_size / 2
-        draw.ellipse([x1, y1, x2, y2],
-                     fill=current_color, outline=current_color)
+        # Draw a line between the previous and current positions
+        draw.line([prev_x, prev_y, event.x, event.y],
+                  fill=current_color, width=brush_size)
+        # Draw circles at the ends to simulate rounded caps
+        draw.ellipse((prev_x - brush_size / 2, prev_y - brush_size / 2,
+                      prev_x + brush_size / 2, prev_y + brush_size / 2),
+                     fill=current_color)
+        draw.ellipse((event.x - brush_size / 2, event.y - brush_size / 2,
+                      event.x + brush_size / 2, event.y + brush_size / 2),
+                     fill=current_color)
         update_canvas()
-        # For undo functionality
-        actions_stack.append(image.copy())
-        redo_stack.clear()  # Clear redo stack
+        prev_x, prev_y = event.x, event.y
     elif current_tool == "eraser":
-        x1 = event.x - brush_size / 2
-        y1 = event.y - brush_size / 2
-        x2 = event.x + brush_size / 2
-        y2 = event.y + brush_size / 2
-        draw.rectangle([x1, y1, x2, y2],
-                       fill="white", outline="white")
+        draw.line([prev_x, prev_y, event.x, event.y],
+                  fill="white", width=brush_size)
+        draw.ellipse((prev_x - brush_size / 2, prev_y - brush_size / 2,
+                      prev_x + brush_size / 2, prev_y + brush_size / 2),
+                     fill="white")
+        draw.ellipse((event.x - brush_size / 2, event.y - brush_size / 2,
+                      event.x + brush_size / 2, event.y + brush_size / 2),
+                     fill="white")
         update_canvas()
-        # For undo functionality
-        actions_stack.append(image.copy())
-        redo_stack.clear()
+        prev_x, prev_y = event.x, event.y
     elif current_tool in ("rectangle", "circle", "line"):
         # Draw a shape preview
         temp_image = image.copy()
         temp_draw = ImageDraw.Draw(temp_image)
         x0, y0 = start_x, start_y
         x1, y1 = event.x, event.y
-        if current_tool in ("rectangle", "circle"):
-            shape_bbox = [min(x0, x1), min(y0, y1),
-                          max(x0, x1), max(y0, y1)]
-        else:
-            shape_bbox = [x0, y0, x1, y1]
         if current_tool == "rectangle":
-            temp_draw.rectangle(shape_bbox,
+            temp_draw.rectangle([x0, y0, x1, y1],
                                 outline=current_color,
                                 width=brush_size)
         elif current_tool == "circle":
-            temp_draw.ellipse(shape_bbox,
+            temp_draw.ellipse([x0, y0, x1, y1],
                               outline=current_color,
                               width=brush_size)
         elif current_tool == "line":
-            temp_draw.line(shape_bbox,
+            temp_draw.line([x0, y0, x1, y1],
                            fill=current_color,
                            width=brush_size)
         # Update canvas with preview
@@ -250,27 +250,19 @@ def finalize_shape(event):
     if current_tool in ("rectangle", "circle", "line"):
         x0, y0 = start_x, start_y
         x1, y1 = event.x, event.y
-        if current_tool in ("rectangle", "circle"):
-            shape_bbox = [min(x0, x1), min(y0, y1),
-                          max(x0, x1), max(y0, y1)]
-        else:
-            shape_bbox = [x0, y0, x1, y1]
         if current_tool == "rectangle":
-            draw.rectangle(shape_bbox,
+            draw.rectangle([x0, y0, x1, y1],
                            outline=current_color,
                            width=brush_size)
         elif current_tool == "circle":
-            draw.ellipse(shape_bbox,
+            draw.ellipse([x0, y0, x1, y1],
                          outline=current_color,
                          width=brush_size)
         elif current_tool == "line":
-            draw.line(shape_bbox,
+            draw.line([x0, y0, x1, y1],
                       fill=current_color,
                       width=brush_size)
         update_canvas()
-        # For undo functionality
-        actions_stack.append(image.copy())
-        redo_stack.clear()
     elif current_tool == "fill":
         # Implement fill (bucket tool)
         fill_color = tuple(
@@ -279,7 +271,7 @@ def finalize_shape(event):
         ) + (255,)
         flood_fill(event.x, event.y, fill_color)
         update_canvas()
-        # For undo functionality
+        # For undo functionality, store the image after fill
         actions_stack.append(image.copy())
         redo_stack.clear()
 
