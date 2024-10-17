@@ -1,6 +1,6 @@
 import tkinter as tk
 from tkinter import colorchooser
-from tkinter import ttk, filedialog, messagebox
+from tkinter import ttk, filedialog, messagebox, simpledialog
 from PIL import Image, ImageDraw, ImageTk
 
 # Default settings
@@ -67,36 +67,6 @@ class CreateToolTip(object):
             self.tip_window.destroy()
             self.tip_window = None
 
-# Function to change the color using the color picker
-def choose_color(event=None):
-    global current_color
-    color = colorchooser.askcolor(title="Pick a color")
-    if color[1] is not None:
-        current_color = color[1]
-        # Update the color display
-        color_button.delete("all")
-        color_button.create_rectangle(0, 0, color_button_size, color_button_size, fill=current_color, outline='')
-        update_color_status()
-
-# Function to select the drawing tool
-def select_tool(tool):
-    global current_tool
-    current_tool = tool
-    update_tool_status()
-    update_button_states()
-
-# Function to update the appearance of tool buttons based on the active tool
-def update_button_states():
-    for tool_name, button_info in tool_buttons.items():
-        canvas_btn = button_info['canvas']
-        circle = button_info['circle']
-        if tool_name == current_tool:
-            # Active button
-            canvas_btn.itemconfig(circle, fill=active_color)
-        else:
-            # Inactive button
-            canvas_btn.itemconfig(circle, fill=circle_color)
-
 # Initialize the drawing surface (will be updated later)
 image = None
 draw = None
@@ -135,6 +105,81 @@ def resize_canvas(event):
         draw = ImageDraw.Draw(image)
         update_canvas()
 
+# Function to change the color using the color picker
+def choose_color(event=None):
+    global current_color
+    color = colorchooser.askcolor(title="Pick a color")
+    if color[1] is not None:
+        current_color = color[1]
+        # Update the color display
+        color_button.delete("all")
+        color_button.create_rectangle(
+            0, 0, color_button_size, color_button_size,
+            fill=current_color, outline=''
+        )
+        update_color_status()
+        update_color_history(current_color)
+
+# Initialize color history
+color_history = []
+
+def update_color_history(color):
+    if color not in color_history:
+        color_history.insert(0, color)
+        if len(color_history) > 5:
+            color_history.pop()
+        refresh_color_history()
+
+def refresh_color_history():
+    for widget in history_frame.winfo_children():
+        widget.destroy()
+    for color in color_history:
+        swatch = tk.Canvas(
+            history_frame, width=20, height=20,
+            bd=1, relief='ridge'
+        )
+        swatch.create_rectangle(
+            0, 0, 20, 20, fill=color, outline=''
+        )
+        # Modify the event binding to prevent propagation
+        swatch.bind(
+            "<Button-1>",
+            lambda event, col=color: (select_preset_color(col), "break")
+        )
+        swatch.pack(side=tk.LEFT, padx=1)
+        CreateToolTip(swatch, f"Select Color {color}")
+
+def select_preset_color(color):
+    global current_color
+    current_color = color
+    # Update the color display
+    color_button.delete("all")
+    color_button.create_rectangle(
+        0, 0, color_button_size, color_button_size,
+        fill=current_color, outline=''
+    )
+    update_color_status()
+    # Do not call update_color_history here to prevent duplicates
+
+# Function to select the drawing tool
+def select_tool(tool):
+    global current_tool
+    current_tool = tool
+    update_tool_status()
+    update_button_states()
+
+# Function to update the appearance of tool buttons
+def update_button_states():
+    for tool_name, button_info in tool_buttons.items():
+        canvas_btn = button_info['canvas']
+        circle = button_info['circle']
+        if tool_name == current_tool:
+            # Active button
+            canvas_btn.itemconfig(circle, fill=active_color)
+        else:
+            # Inactive button
+            canvas_btn.itemconfig(circle, fill=circle_color)
+
 # Function to start drawing shapes or freehand
 start_x, start_y = None, None
 def start_draw(event):
@@ -150,23 +195,27 @@ def start_draw(event):
 def paint(event):
     global start_x, start_y
     if current_tool == "brush":
-        # Draw line on the image
-        x1, y1 = event.x - brush_size / 2, event.y - brush_size / 2
-        x2, y2 = event.x + brush_size / 2, event.y + brush_size / 2
-        draw.ellipse([x1, y1, x2, y2], fill=current_color, outline=current_color)
+        x1 = event.x - brush_size / 2
+        y1 = event.y - brush_size / 2
+        x2 = event.x + brush_size / 2
+        y2 = event.y + brush_size / 2
+        draw.ellipse([x1, y1, x2, y2],
+                     fill=current_color, outline=current_color)
         update_canvas()
         # For undo functionality
         actions_stack.append(image.copy())
         redo_stack.clear()  # Clear redo stack
     elif current_tool == "eraser":
-        # Erase by drawing white color (or background color)
-        x1, y1 = event.x - brush_size / 2, event.y - brush_size / 2
-        x2, y2 = event.x + brush_size / 2, event.y + brush_size / 2
-        draw.rectangle([x1, y1, x2, y2], fill="white", outline="white")
+        x1 = event.x - brush_size / 2
+        y1 = event.y - brush_size / 2
+        x2 = event.x + brush_size / 2
+        y2 = event.y + brush_size / 2
+        draw.rectangle([x1, y1, x2, y2],
+                       fill="white", outline="white")
         update_canvas()
         # For undo functionality
         actions_stack.append(image.copy())
-        redo_stack.clear()  # Clear redo stack
+        redo_stack.clear()
     elif current_tool in ("rectangle", "circle", "line"):
         # Draw a shape preview
         temp_image = image.copy()
@@ -174,48 +223,65 @@ def paint(event):
         x0, y0 = start_x, start_y
         x1, y1 = event.x, event.y
         if current_tool in ("rectangle", "circle"):
-            shape_bbox = [min(x0, x1), min(y0, y1), max(x0, x1), max(y0, y1)]
+            shape_bbox = [min(x0, x1), min(y0, y1),
+                          max(x0, x1), max(y0, y1)]
         else:
             shape_bbox = [x0, y0, x1, y1]
         if current_tool == "rectangle":
-            temp_draw.rectangle(shape_bbox, outline=current_color, width=brush_size)
+            temp_draw.rectangle(shape_bbox,
+                                outline=current_color,
+                                width=brush_size)
         elif current_tool == "circle":
-            temp_draw.ellipse(shape_bbox, outline=current_color, width=brush_size)
+            temp_draw.ellipse(shape_bbox,
+                              outline=current_color,
+                              width=brush_size)
         elif current_tool == "line":
-            temp_draw.line(shape_bbox, fill=current_color, width=brush_size)
+            temp_draw.line(shape_bbox,
+                           fill=current_color,
+                           width=brush_size)
         # Update canvas with preview
         preview_image = ImageTk.PhotoImage(temp_image)
         canvas.create_image(0, 0, image=preview_image, anchor=tk.NW)
         canvas.image = preview_image  # Keep a reference
 
-# Function to finalize shape drawing (when mouse button is released)
+# Function to finalize shape drawing
 def finalize_shape(event):
     global image, draw
     if current_tool in ("rectangle", "circle", "line"):
         x0, y0 = start_x, start_y
         x1, y1 = event.x, event.y
         if current_tool in ("rectangle", "circle"):
-            shape_bbox = [min(x0, x1), min(y0, y1), max(x0, x1), max(y0, y1)]
+            shape_bbox = [min(x0, x1), min(y0, y1),
+                          max(x0, x1), max(y0, y1)]
         else:
             shape_bbox = [x0, y0, x1, y1]
         if current_tool == "rectangle":
-            draw.rectangle(shape_bbox, outline=current_color, width=brush_size)
+            draw.rectangle(shape_bbox,
+                           outline=current_color,
+                           width=brush_size)
         elif current_tool == "circle":
-            draw.ellipse(shape_bbox, outline=current_color, width=brush_size)
+            draw.ellipse(shape_bbox,
+                         outline=current_color,
+                         width=brush_size)
         elif current_tool == "line":
-            draw.line(shape_bbox, fill=current_color, width=brush_size)
+            draw.line(shape_bbox,
+                      fill=current_color,
+                      width=brush_size)
         update_canvas()
         # For undo functionality
         actions_stack.append(image.copy())
-        redo_stack.clear()  # Clear redo stack
+        redo_stack.clear()
     elif current_tool == "fill":
         # Implement fill (bucket tool)
-        fill_color = tuple(int(current_color.lstrip('#')[i:i+2], 16) for i in (0, 2, 4)) + (255,)
+        fill_color = tuple(
+            int(current_color.lstrip('#')[i:i+2], 16)
+            for i in (0, 2, 4)
+        ) + (255,)
         flood_fill(event.x, event.y, fill_color)
         update_canvas()
         # For undo functionality
         actions_stack.append(image.copy())
-        redo_stack.clear()  # Clear redo stack
+        redo_stack.clear()
 
 # Implement flood fill algorithm
 def flood_fill(x, y, fill_color):
@@ -237,7 +303,10 @@ def flood_fill(x, y, fill_color):
         current_color_at_pixel = pixel_data[nx, ny]
         if current_color_at_pixel == target_color:
             pixel_data[nx, ny] = fill_color
-            stack.extend([(nx + 1, ny), (nx - 1, ny), (nx, ny + 1), (nx, ny - 1)])
+            stack.extend([
+                (nx + 1, ny), (nx - 1, ny),
+                (nx, ny + 1), (nx, ny - 1)
+            ])
 
 # Undo function
 def undo(event=None):
@@ -259,6 +328,7 @@ def redo(event=None):
 
 # Define the font for emojis
 emoji_font = ("Apple Color Emoji", 36)
+label_font = ("San Francisco", 10)
 
 # Create the toolbar
 toolbar = ttk.Frame(root, padding="5 5")
@@ -271,8 +341,15 @@ circle_color = "#555555"
 hover_color = "#777777"
 active_color = "#999999"
 
-def create_round_button(parent, emoji, command, tooltip_text, tool_name=None):
-    canvas_btn = tk.Canvas(parent, width=button_size, height=button_size, highlightthickness=0)
+def create_round_button(parent, emoji, command,
+                        tooltip_text, label_text="", tool_name=None):
+    frame = ttk.Frame(parent)
+    frame.pack(side=tk.LEFT, padx=5)
+
+    canvas_btn = tk.Canvas(
+        frame, width=button_size,
+        height=button_size, highlightthickness=0
+    )
     # Draw circle
     circle = canvas_btn.create_oval(
         (button_size - 2 * circle_radius) // 2,
@@ -283,10 +360,17 @@ def create_round_button(parent, emoji, command, tooltip_text, tool_name=None):
         outline=""
     )
     # Add emoji text
-    text = canvas_btn.create_text(button_size // 2, button_size // 2, text=emoji, font=emoji_font)
-    canvas_btn.pack(side=tk.LEFT, padx=5)
+    canvas_btn.create_text(
+        button_size // 2, button_size // 2,
+        text=emoji, font=emoji_font
+    )
+    canvas_btn.pack()
+    
+    # Add label under the icon
+    label = ttk.Label(frame, text=label_text, font=label_font)
+    label.pack()
 
-    # Store the canvas and circle in tool_buttons if tool_name is provided
+    # Store the canvas and circle in tool_buttons
     if tool_name:
         tool_buttons[tool_name] = {'canvas': canvas_btn, 'circle': circle}
 
@@ -323,6 +407,7 @@ brush_button = create_round_button(
     '🖌️',
     lambda: select_tool("brush"),
     "Brush Tool (B)",
+    label_text="Brush",
     tool_name="brush"
 )
 
@@ -331,11 +416,14 @@ eraser_button = create_round_button(
     '🩹',
     lambda: select_tool("eraser"),
     "Eraser Tool (E)",
+    label_text="Eraser",
     tool_name="eraser"
 )
 
 # Separator between groups
-ttk.Separator(toolbar, orient=tk.VERTICAL).pack(side=tk.LEFT, fill=tk.Y, padx=5)
+ttk.Separator(toolbar, orient=tk.VERTICAL).pack(
+    side=tk.LEFT, fill=tk.Y, padx=5
+)
 
 # Group 2: Shape Tools (Rectangle, Circle, Line)
 shape_tools_frame = ttk.Frame(toolbar)
@@ -346,6 +434,7 @@ rectangle_button = create_round_button(
     '▭',
     lambda: select_tool("rectangle"),
     "Rectangle Tool (R)",
+    label_text="Rectangle",
     tool_name="rectangle"
 )
 
@@ -354,6 +443,7 @@ circle_button = create_round_button(
     '⚪',
     lambda: select_tool("circle"),
     "Circle Tool (C)",
+    label_text="Circle",
     tool_name="circle"
 )
 
@@ -362,11 +452,14 @@ line_button = create_round_button(
     '➖',
     lambda: select_tool("line"),
     "Line Tool (L)",
+    label_text="Line",
     tool_name="line"
 )
 
 # Separator between groups
-ttk.Separator(toolbar, orient=tk.VERTICAL).pack(side=tk.LEFT, fill=tk.Y, padx=5)
+ttk.Separator(toolbar, orient=tk.VERTICAL).pack(
+    side=tk.LEFT, fill=tk.Y, padx=5
+)
 
 # Group 3: Fill Tool
 fill_tools_frame = ttk.Frame(toolbar)
@@ -377,11 +470,14 @@ fill_button = create_round_button(
     '🪣',
     lambda: select_tool("fill"),
     "Fill Tool (F)",
+    label_text="Fill",
     tool_name="fill"
 )
 
 # Separator between groups
-ttk.Separator(toolbar, orient=tk.VERTICAL).pack(side=tk.LEFT, fill=tk.Y, padx=5)
+ttk.Separator(toolbar, orient=tk.VERTICAL).pack(
+    side=tk.LEFT, fill=tk.Y, padx=5
+)
 
 # Group 4: Action Tools (Undo and Redo)
 action_tools_frame = ttk.Frame(toolbar)
@@ -391,18 +487,22 @@ undo_button = create_round_button(
     action_tools_frame,
     '↩️',
     undo,
-    "Undo (Cmd+Z)"
+    "Undo (Cmd+Z)",
+    label_text="Undo"
 )
 
 redo_button = create_round_button(
     action_tools_frame,
     '↪️',
     redo,
-    "Redo (Shift+Cmd+Z)"
+    "Redo (Shift+Cmd+Z)",
+    label_text="Redo"
 )
 
 # Separator between groups
-ttk.Separator(toolbar, orient=tk.VERTICAL).pack(side=tk.LEFT, fill=tk.Y, padx=5)
+ttk.Separator(toolbar, orient=tk.VERTICAL).pack(
+    side=tk.LEFT, fill=tk.Y, padx=5
+)
 
 # Group 5: Color Picker and Brush Size
 other_tools_frame = ttk.Frame(toolbar)
@@ -412,10 +512,21 @@ other_tools_frame.pack(side=tk.LEFT, padx=5)
 color_button_size = 50
 
 # Add color button
-color_button = tk.Canvas(other_tools_frame, width=color_button_size, height=color_button_size, bd=1, relief='ridge')
-color_button.create_rectangle(0, 0, color_button_size, color_button_size, fill=current_color, outline='')
+color_button_frame = ttk.Frame(other_tools_frame)
+color_button_frame.pack(side=tk.LEFT, padx=5)
+
+color_button = tk.Canvas(
+    color_button_frame, width=color_button_size,
+    height=color_button_size, bd=1, relief='ridge'
+)
+color_button.create_rectangle(
+    0, 0, color_button_size, color_button_size,
+    fill=current_color, outline=''
+)
 color_button.bind("<Button-1>", choose_color)
-color_button.pack(side=tk.LEFT, padx=5)
+color_button.pack()
+color_label = ttk.Label(color_button_frame, text="Color", font=label_font)
+color_label.pack()
 CreateToolTip(color_button, "Choose Color")
 
 # Add brush size label and slider frame
@@ -426,31 +537,43 @@ brush_size_frame.pack(side=tk.LEFT, padx=5)
 min_label = ttk.Label(brush_size_frame, text="1")
 min_label.pack(side=tk.LEFT)
 
-# Add max label
-max_label = ttk.Label(brush_size_frame, text="100")
-max_label.pack(side=tk.RIGHT)
-
 # Add current brush size label
-brush_size_value_label = ttk.Label(brush_size_frame, text=f"{brush_size}")
-brush_size_value_label.pack(side=tk.RIGHT, padx=5)
+brush_size_value_label = ttk.Label(
+    brush_size_frame, text=f"{brush_size}"
+)
+brush_size_value_label.pack(side=tk.LEFT, padx=5)
 
-# Add brush size slider
+# Define update_brush_size function
 def update_brush_size(value):
     global brush_size
     brush_size = max(1, int(float(value)))
     brush_size_value_label.config(text=f"{brush_size}")
 
+# Add brush size slider
 brush_size_slider = ttk.Scale(
-    brush_size_frame,
-    from_=1,
-    to=100,
-    orient=tk.HORIZONTAL,
-    command=update_brush_size,
+    brush_size_frame, from_=1, to=100,
+    orient=tk.HORIZONTAL, command=update_brush_size,
     length=150
 )
 brush_size_slider.set(brush_size)
 brush_size_slider.pack(side=tk.LEFT, padx=2)
 CreateToolTip(brush_size_slider, "Adjust Brush Size")
+
+# Add max label
+max_label = ttk.Label(brush_size_frame, text="100")
+max_label.pack(side=tk.LEFT)
+
+# Separator between groups
+ttk.Separator(toolbar, orient=tk.VERTICAL).pack(
+    side=tk.LEFT, fill=tk.Y, padx=5
+)
+
+# Group 6: Color History Feature
+history_frame = ttk.Frame(toolbar)
+history_frame.pack(side=tk.LEFT, padx=5)
+CreateToolTip(history_frame, "Color History")
+
+refresh_color_history()
 
 # Add status bar
 status_bar = ttk.Frame(root, relief=tk.SUNKEN, padding="5 2")
@@ -493,7 +616,9 @@ def initialize_canvas_image(event=None):
     if image is None:
         canvas_width = canvas.winfo_width()
         canvas_height = canvas.winfo_height()
-        image = Image.new("RGBA", (canvas_width, canvas_height), "white")
+        image = Image.new(
+            "RGBA", (canvas_width, canvas_height), "white"
+        )
         draw = ImageDraw.Draw(image)
         update_canvas()
 
@@ -507,7 +632,7 @@ canvas.bind("<B1-Motion>", paint)
 canvas.bind("<ButtonPress-1>", start_draw)
 canvas.bind("<ButtonRelease-1>", finalize_shape)
 
-# Create macOS-style menus (optional; you can adjust this section as needed)
+# Create macOS-style menus (optional; you can adjust this section)
 def create_macos_menus(root):
     # Remove the default Tk menu bar
     root.option_add('*tearOff', False)
@@ -520,38 +645,66 @@ def create_macos_menus(root):
     app_menu = tk.Menu(menu_bar, name='apple')
     menu_bar.add_cascade(menu=app_menu)
 
-    app_menu.add_command(label="About Simple Drawing Application", command=show_about)
+    app_menu.add_command(
+        label="About Simple Drawing Application",
+        command=show_about
+    )
     app_menu.add_separator()
-    app_menu.add_command(label="Quit Simple Drawing Application", command=root.quit, accelerator='Cmd+Q')
+    app_menu.add_command(
+        label="Quit Simple Drawing Application",
+        command=root.quit, accelerator='Cmd+Q'
+    )
 
     # File menu
     file_menu = tk.Menu(menu_bar)
     menu_bar.add_cascade(label="File", menu=file_menu)
-    file_menu.add_command(label="New", command=new_file, accelerator='Cmd+N')
-    file_menu.add_command(label="Open...", command=open_image, accelerator='Cmd+O')
-    file_menu.add_command(label="Save As...", command=save_image, accelerator='Cmd+S')
+    file_menu.add_command(
+        label="New", command=new_file, accelerator='Cmd+N'
+    )
+    file_menu.add_command(
+        label="Open...", command=open_image, accelerator='Cmd+O'
+    )
+    file_menu.add_command(
+        label="Save As...", command=save_image, accelerator='Cmd+S'
+    )
 
     # Edit menu
     edit_menu = tk.Menu(menu_bar)
     menu_bar.add_cascade(label="Edit", menu=edit_menu)
-    edit_menu.add_command(label="Undo", command=undo, accelerator='Cmd+Z')
-    edit_menu.add_command(label="Redo", command=redo, accelerator='Shift+Cmd+Z')
+    edit_menu.add_command(
+        label="Undo", command=undo, accelerator='Cmd+Z'
+    )
+    edit_menu.add_command(
+        label="Redo", command=redo, accelerator='Shift+Cmd+Z'
+    )
 
     # Help menu
     help_menu = tk.Menu(menu_bar)
     menu_bar.add_cascade(label="Help", menu=help_menu)
-    help_menu.add_command(label="Simple Drawing Application Help", command=show_help)
+    help_menu.add_command(
+        label="Simple Drawing Application Help",
+        command=show_help
+    )
 
 # Implement show_about and other menu functions
 def show_about():
-    messagebox.showinfo("About", "Simple Drawing Application\nCreated with Tkinter and Pillow")
+    messagebox.showinfo(
+        "About",
+        "Simple Drawing Application\nCreated with Tkinter and Pillow"
+    )
 
 def new_file(event=None):
     global image, draw, actions_stack, redo_stack
-    if messagebox.askyesno("New File", "Are you sure you want to create a new file? Unsaved changes will be lost."):
+    if messagebox.askyesno(
+        "New File",
+        "Are you sure you want to create a new file?"
+        " Unsaved changes will be lost."
+    ):
         canvas_width = canvas.winfo_width()
         canvas_height = canvas.winfo_height()
-        image = Image.new("RGBA", (canvas_width, canvas_height), "white")
+        image = Image.new(
+            "RGBA", (canvas_width, canvas_height), "white"
+        )
         draw = ImageDraw.Draw(image)
         actions_stack.clear()
         redo_stack.clear()
@@ -559,13 +712,22 @@ def new_file(event=None):
 
 def open_image(event=None):
     global image, draw, actions_stack, redo_stack
-    file_path = filedialog.askopenfilename(filetypes=[("Image files", "*.png *.jpg *.jpeg *.bmp"), ("All files", "*.*")])
+    file_path = filedialog.askopenfilename(
+        filetypes=[
+            ("Image files", "*.png *.jpg *.jpeg *.bmp"),
+            ("All files", "*.*")
+        ]
+    )
     if file_path:
         opened_image = Image.open(file_path).convert("RGBA")
         canvas_width = canvas.winfo_width()
         canvas_height = canvas.winfo_height()
-        opened_image = opened_image.resize((canvas_width, canvas_height), Image.ANTIALIAS)
-        image = Image.new("RGBA", (canvas_width, canvas_height), "white")
+        opened_image = opened_image.resize(
+            (canvas_width, canvas_height), Image.LANCZOS
+        )
+        image = Image.new(
+            "RGBA", (canvas_width, canvas_height), "white"
+        )
         image.paste(opened_image, (0, 0))
         draw = ImageDraw.Draw(image)
         actions_stack.clear()
@@ -573,13 +735,21 @@ def open_image(event=None):
         update_canvas()
 
 def save_image(event=None):
-    file_path = filedialog.asksaveasfilename(defaultextension=".png",
-                                             filetypes=[("PNG files", "*.png"), ("All files", "*.*")])
+    file_path = filedialog.asksaveasfilename(
+        defaultextension=".png",
+        filetypes=[
+            ("PNG files", "*.png"),
+            ("All files", "*.*")
+        ]
+    )
     if file_path:
         image.save(file_path)
 
 def show_help():
-    messagebox.showinfo("Help", "This is a simple drawing application.")
+    messagebox.showinfo(
+        "Help",
+        "This is a simple drawing application."
+    )
 
 # Call the function to create menus
 create_macos_menus(root)
