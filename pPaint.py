@@ -2,6 +2,7 @@ import tkinter as tk
 from tkinter import colorchooser
 from tkinter import ttk, filedialog, messagebox
 from PIL import Image, ImageDraw, ImageTk
+import sys
 
 # Default settings
 current_color = "#000000"
@@ -30,11 +31,13 @@ def choose_color(event=None):
         # Update the color display
         color_button.delete("all")
         color_button.create_rectangle(0, 0, 24, 24, fill=current_color, outline='')
+        update_color_status()
 
 # Function to select the drawing tool
 def select_tool(tool):
     global current_tool
     current_tool = tool
+    update_tool_status()
 
 # Function to update brush size from slider
 def update_brush_size(value):
@@ -50,6 +53,7 @@ def update_canvas():
     global photo_image
     photo_image = ImageTk.PhotoImage(image)
     canvas.create_image(0, 0, image=photo_image, anchor=tk.NW)
+    canvas.config(scrollregion=canvas.bbox(tk.ALL))
 
 # Function to handle canvas resizing
 def resize_canvas(event):
@@ -116,13 +120,16 @@ def paint(event):
         temp_draw = ImageDraw.Draw(temp_image)
         x0, y0 = start_x, start_y
         x1, y1 = event.x, event.y
-        shape_bbox = [min(x0, x1), min(y0, y1), max(x0, x1), max(y0, y1)]
+        if current_tool in ("rectangle", "circle"):
+            shape_bbox = [min(x0, x1), min(y0, y1), max(x0, x1), max(y0, y1)]
+        else:
+            shape_bbox = [x0, y0, x1, y1]
         if current_tool == "rectangle":
             temp_draw.rectangle(shape_bbox, outline=current_color, width=brush_size)
         elif current_tool == "circle":
             temp_draw.ellipse(shape_bbox, outline=current_color, width=brush_size)
         elif current_tool == "line":
-            temp_draw.line([start_x, start_y, event.x, event.y], fill=current_color, width=brush_size)
+            temp_draw.line(shape_bbox, fill=current_color, width=brush_size)
         # Update canvas with preview
         preview_image = ImageTk.PhotoImage(temp_image)
         canvas.create_image(0, 0, image=preview_image, anchor=tk.NW)
@@ -134,13 +141,16 @@ def finalize_shape(event):
     if current_tool in ("rectangle", "circle", "line"):
         x0, y0 = start_x, start_y
         x1, y1 = event.x, event.y
-        shape_bbox = [min(x0, x1), min(y0, y1), max(x0, x1), max(y0, y1)]
+        if current_tool in ("rectangle", "circle"):
+            shape_bbox = [min(x0, x1), min(y0, y1), max(x0, x1), max(y0, y1)]
+        else:
+            shape_bbox = [x0, y0, x1, y1]
         if current_tool == "rectangle":
             draw.rectangle(shape_bbox, outline=current_color, width=brush_size)
         elif current_tool == "circle":
             draw.ellipse(shape_bbox, outline=current_color, width=brush_size)
         elif current_tool == "line":
-            draw.line([start_x, start_y, event.x, event.y], fill=current_color, width=brush_size)
+            draw.line(shape_bbox, fill=current_color, width=brush_size)
         update_canvas()
         # For undo functionality
         actions_stack.append(image.copy())
@@ -171,8 +181,8 @@ def flood_fill(x, y, fill_color):
         nx, ny = stack.pop()
         if nx < 0 or nx >= width or ny < 0 or ny >= height:
             continue
-        current_color = pixel_data[nx, ny]
-        if current_color == target_color:
+        current_color_at_pixel = pixel_data[nx, ny]
+        if current_color_at_pixel == target_color:
             pixel_data[nx, ny] = fill_color
             stack.extend([(nx + 1, ny), (nx - 1, ny), (nx, ny + 1), (nx, ny - 1)])
 
@@ -195,53 +205,112 @@ def redo(event=None):
         update_canvas()
 
 # Create the toolbar
-toolbar = ttk.Frame(root, padding="10 5")
+toolbar = ttk.Frame(root, padding="5 5")
 toolbar.pack(side=tk.TOP, fill=tk.X)
 
-# Create a custom color button
+# Create tool groups
+
+# Group 1: Drawing Tools (Brush and Eraser)
+drawing_tools_frame = ttk.Frame(toolbar)
+drawing_tools_frame.pack(side=tk.LEFT, padx=5)
+
+brush_button = ttk.Button(drawing_tools_frame, text="Brush", command=lambda: select_tool("brush"))
+brush_button.pack(side=tk.LEFT, padx=2)
+
+eraser_button = ttk.Button(drawing_tools_frame, text="Eraser", command=lambda: select_tool("eraser"))
+eraser_button.pack(side=tk.LEFT, padx=2)
+
+# Separator between groups
+ttk.Separator(toolbar, orient=tk.VERTICAL).pack(side=tk.LEFT, fill=tk.Y, padx=5)
+
+# Group 2: Shape Tools (Rectangle, Circle, Line)
+shape_tools_frame = ttk.Frame(toolbar)
+shape_tools_frame.pack(side=tk.LEFT, padx=5)
+
+rectangle_button = ttk.Button(shape_tools_frame, text="Rectangle", command=lambda: select_tool("rectangle"))
+rectangle_button.pack(side=tk.LEFT, padx=2)
+
+circle_button = ttk.Button(shape_tools_frame, text="Circle", command=lambda: select_tool("circle"))
+circle_button.pack(side=tk.LEFT, padx=2)
+
+line_button = ttk.Button(shape_tools_frame, text="Line", command=lambda: select_tool("line"))
+line_button.pack(side=tk.LEFT, padx=2)
+
+# Separator between groups
+ttk.Separator(toolbar, orient=tk.VERTICAL).pack(side=tk.LEFT, fill=tk.Y, padx=5)
+
+# Group 3: Fill Tool
+fill_tools_frame = ttk.Frame(toolbar)
+fill_tools_frame.pack(side=tk.LEFT, padx=5)
+
+fill_button = ttk.Button(fill_tools_frame, text="Fill", command=lambda: select_tool("fill"))
+fill_button.pack(side=tk.LEFT, padx=2)
+
+# Separator between groups
+ttk.Separator(toolbar, orient=tk.VERTICAL).pack(side=tk.LEFT, fill=tk.Y, padx=5)
+
+# Group 4: Action Tools (Undo and Redo)
+action_tools_frame = ttk.Frame(toolbar)
+action_tools_frame.pack(side=tk.LEFT, padx=5)
+
+undo_button = ttk.Button(action_tools_frame, text="Undo", command=undo)
+undo_button.pack(side=tk.LEFT, padx=2)
+
+redo_button = ttk.Button(action_tools_frame, text="Redo", command=redo)
+redo_button.pack(side=tk.LEFT, padx=2)
+
+# Separator between groups
+ttk.Separator(toolbar, orient=tk.VERTICAL).pack(side=tk.LEFT, fill=tk.Y, padx=5)
+
+# Group 5: Color Picker and Brush Size
+other_tools_frame = ttk.Frame(toolbar)
+other_tools_frame.pack(side=tk.LEFT, padx=5)
+
+# Add color button
 def create_color_button(parent):
     color_canvas = tk.Canvas(parent, width=24, height=24, bd=1, relief='ridge')
     color_canvas.create_rectangle(0, 0, 24, 24, fill=current_color, outline='')
     color_canvas.bind("<Button-1>", choose_color)
     return color_canvas
 
-# Create tool buttons
-brush_button = ttk.Button(toolbar, text="Brush", command=lambda: select_tool("brush"))
-brush_button.pack(side=tk.LEFT, padx=5)
+color_button = create_color_button(other_tools_frame)
+color_button.pack(side=tk.LEFT, padx=2)
 
-eraser_button = ttk.Button(toolbar, text="Eraser", command=lambda: select_tool("eraser"))
-eraser_button.pack(side=tk.LEFT, padx=5)
+# Add brush size label and slider
+brush_size_label = ttk.Label(other_tools_frame, text="Brush Size:")
+brush_size_label.pack(side=tk.LEFT, padx=2)
 
-rectangle_button = ttk.Button(toolbar, text="Rectangle", command=lambda: select_tool("rectangle"))
-rectangle_button.pack(side=tk.LEFT, padx=5)
-
-circle_button = ttk.Button(toolbar, text="Circle", command=lambda: select_tool("circle"))
-circle_button.pack(side=tk.LEFT, padx=5)
-
-line_button = ttk.Button(toolbar, text="Line", command=lambda: select_tool("line"))
-line_button.pack(side=tk.LEFT, padx=5)
-
-fill_button = ttk.Button(toolbar, text="Fill", command=lambda: select_tool("fill"))
-fill_button.pack(side=tk.LEFT, padx=5)
-
-# Add undo and redo buttons
-undo_button = ttk.Button(toolbar, text="Undo", command=undo)
-undo_button.pack(side=tk.LEFT, padx=5)
-
-redo_button = ttk.Button(toolbar, text="Redo", command=redo)
-redo_button.pack(side=tk.LEFT, padx=5)
-
-# Add color button
-color_button = create_color_button(toolbar)
-color_button.pack(side=tk.LEFT, padx=5)
-
-# Add brush size slider
-brush_size_label = ttk.Label(toolbar, text="Brush Size:")
-brush_size_label.pack(side=tk.LEFT, padx=5)
-
-brush_size_slider = ttk.Scale(toolbar, from_=1, to=20, orient=tk.HORIZONTAL, command=update_brush_size)
+brush_size_slider = ttk.Scale(other_tools_frame, from_=1, to=20, orient=tk.HORIZONTAL, command=update_brush_size, length=100)
 brush_size_slider.set(brush_size)
-brush_size_slider.pack(side=tk.LEFT, padx=5)
+brush_size_slider.pack(side=tk.LEFT, padx=2)
+
+# Add status bar
+status_bar = ttk.Frame(root, relief=tk.SUNKEN, padding="5 2")
+status_bar.pack(side=tk.BOTTOM, fill=tk.X)
+
+# Labels for status information
+tool_status = ttk.Label(status_bar)
+tool_status.pack(side=tk.LEFT, padx=5)
+
+position_status = ttk.Label(status_bar)
+position_status.pack(side=tk.LEFT, padx=5)
+
+color_status = ttk.Label(status_bar)
+color_status.pack(side=tk.LEFT, padx=5)
+
+# Update status functions
+def update_tool_status():
+    tool_status.config(text=f"Tool: {current_tool.capitalize()}")
+
+def update_position_status(event):
+    position_status.config(text=f"Position: {event.x}, {event.y}")
+
+def update_color_status():
+    color_status.config(text=f"Color: {current_color}")
+
+# Call update functions to initialize status bar
+update_tool_status()
+update_color_status()
 
 # Create the canvas for drawing
 canvas = tk.Canvas(root, bg="white")
@@ -265,6 +334,9 @@ canvas.bind("<Configure>", resize_canvas, add="+")
 canvas.bind("<B1-Motion>", paint)
 canvas.bind("<ButtonPress-1>", start_draw)
 canvas.bind("<ButtonRelease-1>", finalize_shape)
+
+# Update statuses on events
+canvas.bind("<Motion>", update_position_status)
 
 # Create macOS-style menus
 def create_macos_menus(root):
@@ -350,6 +422,72 @@ root.bind_all('<Command-s>', save_image)
 root.bind_all('<Command-z>', undo)
 root.bind_all('<Shift-Command-Z>', redo)
 root.bind_all('<Command-q>', lambda event: root.quit())
+
+# Function to handle keyboard shortcuts for tools
+def bind_tool_shortcuts():
+    root.bind('b', lambda event: select_tool('brush'))
+    root.bind('e', lambda event: select_tool('eraser'))
+    root.bind('r', lambda event: select_tool('rectangle'))
+    root.bind('c', lambda event: select_tool('circle'))
+    root.bind('l', lambda event: select_tool('line'))
+    root.bind('f', lambda event: select_tool('fill'))
+
+bind_tool_shortcuts()
+
+# Tooltip class with delay and visible text
+class CreateToolTip(object):
+    def __init__(self, widget, text='', delay=500):
+        self.widget = widget
+        self.text = text
+        self.delay = delay  # Delay in milliseconds before showing the tooltip
+        self.tip_window = None
+        self.id = None
+        self.widget.bind("<Enter>", self.schedule_tooltip)
+        self.widget.bind("<Leave>", self.hide_tooltip)
+        self.widget.bind("<ButtonPress>", self.hide_tooltip)
+
+    def schedule_tooltip(self, event=None):
+        self.unschedule_tooltip()
+        self.id = self.widget.after(self.delay, self.show_tooltip)
+
+    def unschedule_tooltip(self):
+        if self.id:
+            self.widget.after_cancel(self.id)
+            self.id = None
+
+    def show_tooltip(self, event=None):
+        if self.tip_window or not self.text:
+            return
+        x = self.widget.winfo_rootx() + 20
+        y = self.widget.winfo_rooty() + 20
+        self.tip_window = tw = tk.Toplevel(self.widget)
+        tw.wm_overrideredirect(True)  # Remove window decorations
+        tw.wm_geometry(f"+{x}+{y}")
+        label = tk.Label(
+            tw, text=self.text, justify=tk.LEFT,
+            background="#ffffe0", relief='solid', borderwidth=1,
+            foreground="black", font=("San Francisco", 10)
+        )
+        label.pack(ipadx=1)
+        self.id = None  # Reset the schedule ID
+
+    def hide_tooltip(self, event=None):
+        self.unschedule_tooltip()
+        if self.tip_window:
+            self.tip_window.destroy()
+            self.tip_window = None
+
+# Attach tooltips to buttons
+CreateToolTip(brush_button, "Brush Tool (B)")
+CreateToolTip(eraser_button, "Eraser Tool (E)")
+CreateToolTip(rectangle_button, "Rectangle Tool (R)")
+CreateToolTip(circle_button, "Circle Tool (C)")
+CreateToolTip(line_button, "Line Tool (L)")
+CreateToolTip(fill_button, "Fill Tool (F)")
+CreateToolTip(undo_button, "Undo (Cmd+Z)")
+CreateToolTip(redo_button, "Redo (Shift+Cmd+Z)")
+CreateToolTip(color_button, "Choose Color")
+CreateToolTip(brush_size_slider, "Adjust Brush Size")
 
 # Start the Tkinter main loop
 root.mainloop()
