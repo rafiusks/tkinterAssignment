@@ -114,7 +114,9 @@ def paint(event):
         # Draw a shape preview
         temp_image = image.copy()
         temp_draw = ImageDraw.Draw(temp_image)
-        shape_bbox = [start_x, start_y, event.x, event.y]
+        x0, y0 = start_x, start_y
+        x1, y1 = event.x, event.y
+        shape_bbox = [min(x0, x1), min(y0, y1), max(x0, x1), max(y0, y1)]
         if current_tool == "rectangle":
             temp_draw.rectangle(shape_bbox, outline=current_color, width=brush_size)
         elif current_tool == "circle":
@@ -130,7 +132,9 @@ def paint(event):
 def finalize_shape(event):
     global image, draw
     if current_tool in ("rectangle", "circle", "line"):
-        shape_bbox = [start_x, start_y, event.x, event.y]
+        x0, y0 = start_x, start_y
+        x1, y1 = event.x, event.y
+        shape_bbox = [min(x0, x1), min(y0, y1), max(x0, x1), max(y0, y1)]
         if current_tool == "rectangle":
             draw.rectangle(shape_bbox, outline=current_color, width=brush_size)
         elif current_tool == "circle":
