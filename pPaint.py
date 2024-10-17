@@ -18,7 +18,7 @@ tool_buttons = {}
 # Create the main window
 root = tk.Tk()
 root.title("Simple Drawing Application")
-root.geometry("1200x600")
+root.geometry("1400x1000")
 
 # Set default font
 default_font = ("San Francisco", 12)
