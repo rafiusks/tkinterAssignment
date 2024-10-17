@@ -1,35 +1,173 @@
-In this assignment, students will design and implement a simple graphical user interface (GUI) using Python and the Tkinter library. The goal is to create a basic drawing application similar to Microsoft Paint, where users can draw, erase, and interact with various drawing tools such as brushes and colors. Through this project, students will explore fundamental concepts in UI/UX design, event handling, and graphical programming while gaining hands-on experience with Tkinter, a powerful toolkit for building user interfaces in Python. This assignment will emphasize both functionality and the importance of user-friendly design principles.
-In addition to the basic drawing tools, students are encouraged to extend their programs by implementing optional features. These may include:
+# Simple Drawing Application
 
-· Shape tools: Allow users to draw shapes such as rectangles, circles, and lines. - done
-· Fill tool: Add functionality to fill closed shapes with a selected color. - done
-· Customizable brush sizes: Give users the ability to change the size of their brush for more precise drawing. - done
-· Undo/Redo functionality: Implement a system to track user actions and allow them to revert or redo their changes. - done
-· Save and open files: Allow users to save their drawings as image files and open previously saved work.
-· Color picker: Provide an interactive color palette or picker for custom color selection.
-· Layer system: Introduce multiple layers for drawing, similar to advanced graphic design tools, where users can draw on different layers and manipulate them independently.
+A user-friendly drawing application built with Python's Tkinter and Pillow (PIL) libraries. This application allows users to create freehand drawings, erase mistakes, draw various shapes, fill areas with color, and manage their color palette efficiently. It also includes undo and redo functionalities to enhance the drawing experience.
 
-By adding these features, students will not only enhance the functionality of their programs but also learn how to manage more complex GUI interactions and develop a richer, more versatile user experience.
+---
 
-# tkinterAssignment
+## Table of Contents
 
+- [Features](#features)
+- [Installation](#installation)
+- [Usage](#usage)
+  - [Toolbar Tools](#toolbar-tools)
+  - [Keyboard Shortcuts](#keyboard-shortcuts)
+  - [Menu Options](#menu-options)
+- [Dependencies](#dependencies)
+- [License](#license)
+- [Acknowledgments](#acknowledgments)
 
-1.	Set Up the Environment:
-	•	Install Python (if not already installed).
-	•	Ensure Tkinter is installed (it typically comes with Python).
-2.	Create a Tkinter Window:
-	•	Initialize the main window using Tk().
-3.	Set Up the Canvas:
-	•	Create a canvas widget where the drawing will take place.
-	•	Define the size and background color of the canvas.
-4.	Add a Brush Tool:
-	•	Capture mouse events like left-click and drag to draw lines.
-	•	Use mouse position to determine where to draw on the canvas.
-5.	Implement Color Selection:
-	•	Add basic color options (e.g., buttons or a simple palette).
-6.	Add an Eraser Tool:
-	•	Implement a tool that draws with the background color to “erase” drawn content.
-7.	Create a Simple Menu:
-	•	Add a simple menu or toolbar for selecting tools (brush, eraser, colors).
-8.	Run the Application:
-	•	Implement the main loop to keep the application running.
+---
+
+## Features
+
+- **Freehand Drawing:** Draw smooth, continuous lines with adjustable brush sizes.
+- **Eraser Tool:** Erase parts of your drawing with customizable eraser sizes.
+- **Shape Tools:** Draw rectangles, circles, and straight lines with precision.
+- **Fill Tool:** Fill enclosed areas with your chosen color using a flood fill algorithm.
+- **Color Picker:** Select any color using an intuitive color chooser dialog.
+- **Color History:** Access your recently used colors for quick selection.
+- **Undo/Redo:** Easily revert or reapply your last actions.
+- **Save and Open:** Save your artwork as PNG files and open existing images for editing.
+- **Keyboard Shortcuts:** Switch tools and perform actions quickly using keyboard shortcuts.
+- **Tooltips:** Get helpful information about tools and features through tooltips.
+
+---
+
+## Installation
+
+### Prerequisites
+
+- **Python 3.7 or higher**: Ensure you have Python installed on your system. You can download it from [python.org](https://www.python.org/downloads/).
+- **Pillow Library**: Python Imaging Library fork required for image processing.
+
+### Steps
+
+1. **Clone the Repository**
+
+   ```bash
+   git clone https://github.com/yourusername/simple-drawing-app.git
+   cd simple-drawing-app
+   ```
+
+2. **Install Dependencies**
+
+   Use `pip` to install the required Python packages.
+
+   ```bash
+   pip install Pillow
+   ```
+
+   **Note:** Tkinter is included with standard Python installations on Windows and macOS. On some Linux distributions, you may need to install it separately (e.g., `sudo apt-get install python3-tk`).
+
+3. **Run the Application**
+
+   Execute the Python script to start the drawing application.
+
+   ```bash
+   python pPaint.py
+   ```
+
+---
+
+## Usage
+
+### Toolbar Tools
+
+The application features a toolbar with various tools grouped into categories. Each tool is represented by an icon and has an associated label.
+
+1. **Drawing Tools (Brush and Eraser)**
+   - **Brush (🖌️):** Use the brush tool to draw freehand lines.
+   - **Eraser (🩹):** Use the eraser to remove parts of your drawing.
+
+2. **Shape Tools (Rectangle, Circle, Line)**
+   - **Rectangle (▭):** Draw rectangles by clicking and dragging on the canvas.
+   - **Circle (⚪):** Draw circles or ellipses by clicking and dragging.
+   - **Line (➖):** Draw straight lines between two points.
+
+3. **Fill Tool**
+   - **Fill (🪣):** Fill an enclosed area with the selected color using the fill tool.
+
+4. **Action Tools (Undo and Redo)**
+   - **Undo (↩️):** Revert the last action.
+   - **Redo (↪️):** Reapply the last undone action.
+
+5. **Color Picker and Brush Size**
+   - **Color Picker:** Click the color box to open the color chooser dialog and select a new drawing color.
+   - **Brush Size Slider:** Adjust the size of the brush or eraser from 1 to 100.
+
+6. **Color History**
+   - Access your last five used colors for quick selection.
+
+### Keyboard Shortcuts
+
+Enhance your productivity by using keyboard shortcuts to switch tools and perform actions:
+
+- **Brush:** `B`
+- **Eraser:** `E`
+- **Rectangle:** `R`
+- **Circle:** `C`
+- **Line:** `L`
+- **Fill:** `F`
+- **Undo:** `Cmd + Z`
+- **Redo:** `Shift + Cmd + Z`
+- **New File:** `Cmd + N`
+- **Open Image:** `Cmd + O`
+- **Save Image:** `Cmd + S`
+- **Quit Application:** `Cmd + Q`
+
+### Menu Options
+
+The application includes a menu bar with the following options:
+
+1. **File**
+   - **New:** Create a new blank drawing. (`Cmd + N`)
+   - **Open:** Open an existing image file for editing. (`Cmd + O`)
+   - **Save As:** Save your current drawing as a PNG file. (`Cmd + S`)
+
+2. **Edit**
+   - **Undo:** Undo the last action. (`Cmd + Z`)
+   - **Redo:** Redo the last undone action. (`Shift + Cmd + Z`)
+
+3. **Help**
+   - **About:** Display information about the application.
+   - **Help:** Display basic instructions for using the application.
+
+---
+
+## Dependencies
+
+- **Python 3.7+**
+- **Tkinter:** Standard GUI library for Python.
+- **Pillow:** Python Imaging Library for image processing.
+
+Install dependencies using `pip`:
+
+```bash
+pip install Pillow
+```
+
+**Note:** Tkinter is typically included with Python on Windows and macOS. On some Linux distributions, you may need to install it separately (e.g., `sudo apt-get install python3-tk`).
+
+---
+
+## License
+
+This project is licensed under the [MIT License](LICENSE).
+
+---
+
+## Acknowledgments
+
+- Built with Python's Tkinter and Pillow libraries.
+- Inspired by simple drawing applications available in various operating systems.
+- Special thanks to the open-source community for their invaluable tools and libraries.
+
+---
+
+## Contact
+
+For any questions, suggestions, or contributions, please contact [your-email@example.com](mailto:your-email@example.com).
+
+---
+
+**Enjoy creating your artwork!**
