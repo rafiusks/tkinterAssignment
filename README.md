@@ -40,16 +40,7 @@ A user-friendly drawing application built with Python's Tkinter and Pillow (PIL)
 - **Python 3.7 or higher**: Ensure you have Python installed on your system. You can download it from [python.org](https://www.python.org/downloads/).
 - **Pillow Library**: Python Imaging Library fork required for image processing.
 
-### Steps
-
-1. **Clone the Repository**
-
-   ```bash
-   git clone https://github.com/yourusername/simple-drawing-app.git
-   cd simple-drawing-app
-   ```
-
-2. **Install Dependencies**
+**Install Dependencies**
 
    Use `pip` to install the required Python packages.
 
@@ -150,24 +141,9 @@ pip install Pillow
 
 ---
 
-## License
-
-This project is licensed under the [MIT License](LICENSE).
-
----
-
 ## Acknowledgments
 
 - Built with Python's Tkinter and Pillow libraries.
 - Inspired by simple drawing applications available in various operating systems.
-- Special thanks to the open-source community for their invaluable tools and libraries.
 
 ---
-
-## Contact
-
-For any questions, suggestions, or contributions, please contact [your-email@example.com](mailto:your-email@example.com).
-
----
-
-**Enjoy creating your artwork!**
