@@ -6,6 +6,7 @@ from PIL import ImageGrab
 import threading
 from collections import deque
 from functools import lru_cache
+import platform
 
 # Add this after your imports and before other code
 class Config:
@@ -34,7 +35,40 @@ tool_buttons = {}
 start_x, start_y = None, None
 prev_x, prev_y = None, None
 
-# Create the main window
+# Try to enable GPU acceleration
+def enable_gpu_acceleration():
+    system = platform.system().lower()
+    
+    if system == 'windows':
+        try:
+            # Enable DPI awareness and hardware acceleration on Windows
+            from ctypes import windll
+            windll.shcore.SetProcessDpiAwareness(1)
+            # Enable DirectX hardware acceleration
+            windll.user32.SetProcessDPIAware()
+        except Exception as e:
+            print(f"Could not enable Windows GPU acceleration: {e}")
+    
+    elif system == 'darwin':  # macOS
+        try:
+            # Enable Metal acceleration on macOS
+            import os
+            os.environ['TK_ENABLE_METAL'] = '1'
+        except Exception as e:
+            print(f"Could not enable macOS GPU acceleration: {e}")
+    
+    elif system == 'linux':
+        try:
+            # Enable OpenGL acceleration on Linux
+            import os
+            os.environ['TK_ENABLE_OPENGL'] = '1'
+        except Exception as e:
+            print(f"Could not enable Linux GPU acceleration: {e}")
+
+# Call this before creating the root window
+enable_gpu_acceleration()
+
+# Then create your root window
 root = tk.Tk()
 root.title("Simple Drawing Application")
 root.geometry("1400x1000")
@@ -216,26 +250,31 @@ def paint(event):
     
     if current_tool in ("brush", "eraser"):
         if prev_x and prev_y:
-            # Calculate line properties
             color = current_color if current_tool == "brush" else "white"
             
-            # Draw optimized line
-            if Config.BRUSH_OPTIMIZE:
-                # Use smoother line for larger brush sizes
-                if brush_size > 10:
-                    canvas.create_line(
-                        prev_x, prev_y, event.x, event.y,
-                        fill=color, width=brush_size,
-                        capstyle=tk.ROUND, smooth=True,
-                        splinesteps=5  # Reduce spline steps for better performance
-                    )
-                else:
-                    # Use simpler line for small brush sizes
-                    canvas.create_line(
-                        prev_x, prev_y, event.x, event.y,
-                        fill=color, width=brush_size,
-                        capstyle=tk.ROUND
-                    )
+            # Optimize based on brush size
+            if brush_size > 20:
+                # For very large brushes, use simpler rendering
+                canvas.create_line(
+                    prev_x, prev_y, event.x, event.y,
+                    fill=color, width=brush_size,
+                    capstyle=tk.ROUND
+                )
+            elif brush_size > 10:
+                # Medium brushes with moderate smoothing
+                canvas.create_line(
+                    prev_x, prev_y, event.x, event.y,
+                    fill=color, width=brush_size,
+                    capstyle=tk.ROUND, smooth=True,
+                    splinesteps=3
+                )
+            else:
+                # Small brushes with full smoothing
+                canvas.create_line(
+                    prev_x, prev_y, event.x, event.y,
+                    fill=color, width=brush_size,
+                    capstyle=tk.ROUND, smooth=True
+                )
             
             current_batch.append((prev_x, prev_y, event.x, event.y))
             
