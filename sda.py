@@ -2,6 +2,21 @@ import tkinter as tk
 from tkinter import colorchooser
 from tkinter import ttk, filedialog, messagebox, simpledialog
 from PIL import Image, ImageDraw, ImageTk
+from PIL import ImageGrab
+import threading
+from collections import deque
+from functools import lru_cache
+
+# Add this after your imports and before other code
+class Config:
+    BATCH_SIZE = 5  # Smaller batch size for more frequent updates
+    MAX_ACTIONS = 50
+    CANVAS_UPDATE_DELAY = 16
+    BRUSH_OPTIMIZE = True  # Enable brush optimizations
+
+# Global variables
+current_batch = []
+last_update_time = 0
 
 # Default settings
 current_color = "#000000"
@@ -9,8 +24,8 @@ current_tool = "brush"  # Default tool is brush
 brush_size = 10  # Default brush size set to 10
 
 # Lists to track actions for undo/redo
-actions_stack = []
-redo_stack = []
+actions_stack = deque(maxlen=50)  # Limit memory usage
+redo_stack = deque(maxlen=50)
 
 # Dictionary to hold references to tool buttons
 tool_buttons = {}
@@ -190,70 +205,107 @@ def start_draw(event):
     start_x, start_y = event.x, event.y
     prev_x, prev_y = event.x, event.y
 
-    # For undo functionality, store the image before drawing starts
-    actions_stack.append(image.copy())
-    redo_stack.clear()  # Clear redo stack
+    # For brush and eraser, we'll capture the state after releasing
+    if current_tool not in ("brush", "eraser"):
+        actions_stack.append(image.copy())
+        redo_stack.clear()
 
 # Function to draw on the canvas based on the selected tool
 def paint(event):
-    global prev_x, prev_y
-    if current_tool == "brush":
-        # Draw a line between the previous and current positions
-        draw.line([prev_x, prev_y, event.x, event.y],
-                  fill=current_color, width=brush_size)
-        # Draw circles at the ends to simulate rounded caps
-        draw.ellipse((prev_x - brush_size / 2, prev_y - brush_size / 2,
-                      prev_x + brush_size / 2, prev_y + brush_size / 2),
-                     fill=current_color)
-        draw.ellipse((event.x - brush_size / 2, event.y - brush_size / 2,
-                      event.x + brush_size / 2, event.y + brush_size / 2),
-                     fill=current_color)
-        update_canvas()
+    global prev_x, prev_y, current_batch
+    
+    if current_tool in ("brush", "eraser"):
+        if prev_x and prev_y:
+            # Calculate line properties
+            color = current_color if current_tool == "brush" else "white"
+            
+            # Draw optimized line
+            if Config.BRUSH_OPTIMIZE:
+                # Use smoother line for larger brush sizes
+                if brush_size > 10:
+                    canvas.create_line(
+                        prev_x, prev_y, event.x, event.y,
+                        fill=color, width=brush_size,
+                        capstyle=tk.ROUND, smooth=True,
+                        splinesteps=5  # Reduce spline steps for better performance
+                    )
+                else:
+                    # Use simpler line for small brush sizes
+                    canvas.create_line(
+                        prev_x, prev_y, event.x, event.y,
+                        fill=color, width=brush_size,
+                        capstyle=tk.ROUND
+                    )
+            
+            current_batch.append((prev_x, prev_y, event.x, event.y))
+            
+            if len(current_batch) >= Config.BATCH_SIZE:
+                draw_batch()
+        
         prev_x, prev_y = event.x, event.y
-    elif current_tool == "eraser":
-        draw.line([prev_x, prev_y, event.x, event.y],
-                  fill="white", width=brush_size)
-        draw.ellipse((prev_x - brush_size / 2, prev_y - brush_size / 2,
-                      prev_x + brush_size / 2, prev_y + brush_size / 2),
-                     fill="white")
-        draw.ellipse((event.x - brush_size / 2, event.y - brush_size / 2,
-                      event.x + brush_size / 2, event.y + brush_size / 2),
-                     fill="white")
-        update_canvas()
-        prev_x, prev_y = event.x, event.y
+    
     elif current_tool in ("rectangle", "circle", "line"):
-        # Draw a shape preview
-        temp_image = image.copy()
-        temp_draw = ImageDraw.Draw(temp_image)
-        x0, y0 = start_x, start_y
-        x1, y1 = event.x, event.y
-        if current_tool == "rectangle":
-            temp_draw.rectangle([x0, y0, x1, y1],
-                                outline=current_color,
-                                width=brush_size)
-        elif current_tool == "circle":
-            temp_draw.ellipse([x0, y0, x1, y1],
-                              outline=current_color,
-                              width=brush_size)
-        elif current_tool == "line":
-            temp_draw.line([x0, y0, x1, y1],
-                           fill=current_color,
-                           width=brush_size)
-        # Update canvas with preview
-        preview_image = ImageTk.PhotoImage(temp_image)
-        canvas.create_image(0, 0, image=preview_image, anchor=tk.NW)
-        canvas.image = preview_image  # Keep a reference
+        draw_shape_preview(event)
+
+def draw_batch():
+    global current_batch
+    if not current_batch:
+        return
+
+    # Draw all lines in the batch at once
+    for x1, y1, x2, y2 in current_batch:
+        canvas.create_line(
+            x1, y1, x2, y2,
+            fill=current_color if current_tool == "brush" else "white",
+            width=brush_size,
+            capstyle=tk.ROUND,
+            smooth=True
+        )
+    current_batch.clear()
+
+# Optimize shape preview with caching
+@lru_cache(maxsize=32)
+def get_shape_coordinates(start_x, start_y, end_x, end_y):
+    """Cache frequently used coordinate calculations"""
+    return (start_x, start_y, end_x, end_y)
+
+def draw_shape_preview(event):
+    canvas.delete("preview")  # Remove previous preview
+    
+    if current_tool == "rectangle":
+        canvas.create_rectangle(
+            start_x, start_y, event.x, event.y,
+            outline=current_color,
+            width=brush_size,
+            tags="preview"
+        )
+    elif current_tool == "circle":
+        canvas.create_oval(
+            start_x, start_y, event.x, event.y,
+            outline=current_color,
+            width=brush_size,
+            tags="preview"
+        )
+    elif current_tool == "line":
+        canvas.create_line(
+            start_x, start_y, event.x, event.y,
+            fill=current_color,
+            width=brush_size,
+            tags="preview"
+        )
 
 # Function to finalize shape drawing
 def finalize_shape(event):
     global image, draw
+    canvas.delete("preview")  # Remove the preview
+    
     if current_tool in ("rectangle", "circle", "line"):
         x0, y0 = start_x, start_y
         x1, y1 = event.x, event.y
         if current_tool == "rectangle":
             draw.rectangle([x0, y0, x1, y1],
-                           outline=current_color,
-                           width=brush_size)
+                         outline=current_color,
+                         width=brush_size)
         elif current_tool == "circle":
             draw.ellipse([x0, y0, x1, y1],
                          outline=current_color,
@@ -284,18 +336,23 @@ def flood_fill(x, y, fill_color):
     if target_color == fill_color:
         return
 
-    pixel_data = image.load()
     width, height = image.size
-    stack = [(x, y)]
+    pixels = image.load()
+    stack = {(x, y)}  # Use set instead of list for faster lookups
+    seen = set()  # Track visited pixels
 
     while stack:
         nx, ny = stack.pop()
-        if nx < 0 or nx >= width or ny < 0 or ny >= height:
+        if (nx, ny) in seen:
             continue
-        current_color_at_pixel = pixel_data[nx, ny]
-        if current_color_at_pixel == target_color:
-            pixel_data[nx, ny] = fill_color
-            stack.extend([
+            
+        if (0 <= nx < width and 0 <= ny < height and 
+            pixels[nx, ny] == target_color):
+            pixels[nx, ny] = fill_color
+            seen.add((nx, ny))
+            
+            # Add adjacent pixels
+            stack.update([
                 (nx + 1, ny), (nx - 1, ny),
                 (nx, ny + 1), (nx, ny - 1)
             ])
@@ -598,8 +655,20 @@ update_color_status()
 # Update button states to reflect the initial tool
 update_button_states()
 
-# Create the canvas for drawing
-canvas = tk.Canvas(root, bg="white")
+# Add this before your canvas creation code
+def create_optimized_canvas(root):
+    canvas = tk.Canvas(
+        root,
+        bg="white",
+        highlightthickness=0,  # Remove border
+        confine=True,  # Confine drawing to canvas
+        xscrollincrement=1,  # Smooth scrolling
+        yscrollincrement=1
+    )
+    return canvas
+
+# Then replace your existing canvas creation with:
+canvas = create_optimized_canvas(root)
 canvas.pack(fill=tk.BOTH, expand=True)
 
 # Initialize the canvas image after the canvas is created and packed
@@ -622,7 +691,38 @@ canvas.bind("<Motion>", update_position_status)
 # Bind mouse events to the canvas for drawing and shape creation
 canvas.bind("<B1-Motion>", paint)
 canvas.bind("<ButtonPress-1>", start_draw)
-canvas.bind("<ButtonRelease-1>", finalize_shape)
+canvas.bind("<ButtonRelease-1>", lambda e: (finalize_shape(e), on_release(e)))
+
+# Add this new function to capture the brush strokes when released
+def on_release(event):
+    global image, draw
+    if current_tool in ("brush", "eraser"):
+        # Draw any remaining batch
+        draw_batch()
+        
+        # Capture the final state more efficiently
+        actions_stack.append(image.copy())
+        redo_stack.clear()
+        
+        def capture_canvas():
+            global image, draw
+            # Get canvas bounds
+            x = root.winfo_rootx() + canvas.winfo_x()
+            y = root.winfo_rooty() + canvas.winfo_y()
+            x1 = x + canvas.winfo_width()
+            y1 = y + canvas.winfo_height()
+            
+            try:
+                # Try to capture with ImageGrab
+                image = ImageGrab.grab(bbox=(x, y, x1, y1))
+                draw = ImageDraw.Draw(image)
+            except Exception as e:
+                print(f"Error capturing canvas: {e}")
+        
+        # Use threading for capture
+        thread = threading.Thread(target=capture_canvas)
+        thread.daemon = True  # Make thread daemon so it doesn't block program exit
+        thread.start()
 
 # Create macOS-style menus (optional; you can adjust this section)
 def create_macos_menus(root):
@@ -767,3 +867,10 @@ bind_tool_shortcuts()
 
 # Start the Tkinter main loop
 root.mainloop()
+
+# Add near the start of your program
+try:
+    from ctypes import windll
+    windll.shcore.SetProcessDpiAwareness(1)
+except:
+    pass  # Not on Windows or DPI awareness not available
